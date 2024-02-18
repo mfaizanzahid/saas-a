@@ -29,7 +29,7 @@ export const pricingPlans = [
     id: "enterprise",
     name: "Enterprise",
     description:
-      "A plan to test the upgrade expereince. Try buying this with the test credit card 4242424242424242.",
+      "AAA plan to test the upgrade expereince. Try buying this with the test credit card 4242424242424242.",
     price: "$30",
     priceIntervalName: "per month",
     stripe_price_id: "price_1OlCQ3CAHU0k78s7NWy3RGEe",
