@@ -10,7 +10,9 @@
   if (error) {
     message = "There was an issue signing out."
   } else {
-    goto("/")
+    setTimeout(() => {
+      goto("/login/sign_in")
+    }, 1000)
   }
 </script>
 

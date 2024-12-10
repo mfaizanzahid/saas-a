@@ -1,15 +1,15 @@
 /** @type {import('tailwindcss').Config} */
+import typography from "@tailwindcss/typography"
+import daisyui from "daisyui"
+
 export default {
   content: ['./src/**/*.{html,js,svelte,ts}'],
   theme: {
     extend: {},
   },
-  plugins: [
-    require('@tailwindcss/typography'),
-    require("daisyui")
-  ],
+  plugins: [typography, daisyui],
   daisyui: {
-    themes: [
+    themes: ["fantasy",
       {
         saasstartertheme: {
           "primary": "#180042",
@@ -19,7 +19,7 @@ export default {
           "accent": "#db2777",
           "neutral": "#180042",
           "base-content": "#180042",
-          "base-100": "#fefbf6",
+          "base-100": "#fefbf6",  
         },
       }
     ],

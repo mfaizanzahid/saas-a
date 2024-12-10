@@ -34,9 +34,11 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.14.1",
 		"@supabase/auth-helpers-sveltekit": "^0.10.2",
 		"@supabase/auth-ui-svelte": "^0.2.2",
 		"@supabase/supabase-js": "^2.33.0",
-		"stripe": "^13.3.0"
+		"stripe": "^13.3.0",
+		"svelte-simple-modal": "^1.6.2"
 	}
 }

@@ -107,7 +107,8 @@
       </form>
 
       <div class="text-sm text-slate-800 mt-14">
-        You are logged in as {session?.user?.email}.
+        You are logged in as {session?.user?.email}. <br />Your are unique link
+        is {session?.user?.user_metadata?.code}.
         <br />
         <a class="underline" href="/account/sign_out"> Sign out </a>
       </div>

@@ -1,5 +1,14 @@
 import { fail, redirect } from "@sveltejs/kit"
 
+import Anthropic from '@anthropic-ai/sdk';
+import { PRIVATE_ANTHROPIC_API_KEY } from "$env/static/private";
+
+const anthropic = new Anthropic({
+  apiKey: PRIVATE_ANTHROPIC_API_KEY,
+});
+
+
+
 export const actions = {
   updateEmail: async ({ request, locals: { supabase, getSession } }) => {
     const formData = await request.formData()
@@ -246,7 +255,388 @@ export const actions = {
     const session = await getSession()
     if (session) {
       await supabase.auth.signOut()
-      throw redirect(303, "/")
+      throw redirect(303, "/login")
     }
   },
+
+  generateAnthropicReply: async ({ request, locals: {  supabase, getSession } }) => {
+
+    const formData = await request.formData()
+    // const formData = await request.json(); // Assuming the request data is sent as JSON
+
+   
+
+
+    console.log("FORM DATAAAA",formData)
+
+    const promptA = formData.get("fullPrompt") as string
+
+    const newEmailId = formData.get("emailId") as string ?? null
+    const newEmailSequenceId = formData.get("emailSequenceId") as string ?? null
+    const currentEmailIndex = formData.get("currentEmailIndex")
+    const steps = formData.get("steps")
+    const wordCount = formData.get("wordCount") as string
+
+    console.log("EXISTING EMAIL IDSSSSSSSS",formData.get("emailId"))
+    console.log("EXISTING SEQ IDSSSSSSSS",formData.get("emailSequenceId"))
+    
+
+    console.log("PROMPTA",promptA)
+    const prompt = JSON.parse(promptA)
+    console.log("PROMPT",prompt)
+    const session = await getSession();
+    const userId = session?.user.id
+    // console.log("SESSION DETAILS",session)
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+    try {
+      const message = await anthropic.messages.create({
+        max_tokens: 1024,
+        system:'You are a long-form senior copywriter.',
+        messages: prompt,
+        model: 'claude-3-5-haiku-latest',
+      });
+      // console.log("MESSAGEEEEEEE",message)
+
+
+      console.log("REPLY",message.content);
+      
+
+      const messageContent = message.content
+      const reply = message.content[0]?.text || ''
+
+      console.log('EXTRACTED',reply);
+
+
+
+console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
+
+    try {
+      // ... (existing code)
+
+      // Save the generated content to the user's profile in Supabase
+      const { updatedEmailId, updatedEmailSequenceId }= await createEmailSequence();
+
+      console.log('EMAIL IDS 222',updatedEmailId,updatedEmailSequenceId)
+
+
+      
+   return {
+    status: 200,
+    body: { reply: reply, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId,},
+  }
+      
+
+    } catch (error) {
+      console.error('Error saving email:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error saving email' },
+      };
+    }
+
+    // Function to create or update the "email_sequence" row for the user
+    async function createEmailSequence() {
+      let updatedEmailId, updatedEmailSequenceId;
+
+      try {
+        // Create a new email sequence
+        
+        if (!newEmailSequenceId) {
+        const { data: newEmailSequence, error: sequenceError } = await supabase
+          .from('email_sequences')
+          .upsert([
+            {
+              user_id: userId,
+              name: 'New Untitled Sequence',
+              steps:steps,
+              word_count: wordCount,
+              ...(newEmailSequenceId ? { id: newEmailSequenceId } : {}),
+              // created_at: new Date(),
+            },
+          ])
+          .select();
+          updatedEmailSequenceId = newEmailSequence[0].id
+          
+    console.log("ADDED SEQUENCE ID",newEmailSequence,updatedEmailSequenceId )
+        
+        if (sequenceError) {
+          console.error('Error creating email sequence:', sequenceError);
+          throw new Error('Error creating email sequence');
+        }
+      } else {updatedEmailSequenceId=newEmailSequenceId}
+       
+        // Add a new email linked to the created email_sequence
+        console.log("NEW EMAIL IDDDDDDD",newEmailId)
+
+        const promptAdd = promptA.replace(/\[|\]/g, '')
+        
+    const { data: newEmail, error: newEmailError } = await supabase
+
+
+    .from('emails')
+    .upsert([
+      {
+        sequence_id: updatedEmailSequenceId,
+        index: currentEmailIndex,
+        content: reply,
+        prompt:promptAdd,
+        ...(newEmailId ? { id: newEmailId } : {}),
+      },
+    ])
+    .select();
+    console.log("ADDED EMAIL ADDED ID",newEmail,newEmail[0]?.id )
+
+    updatedEmailId = newEmail[0]?.id
+
+    console.log("ADDED EMAIL ID",updatedEmailId )
+
+  if (newEmailError) {
+    console.error('Error creating email:', newEmailError);
+    throw new Error('Error creating email');
+  }
+
+  if (!newEmail || newEmail.length === 0) {
+    throw new Error('Failed to create email');
+  }
+
+  
+
+  return { updatedEmailId, updatedEmailSequenceId };
+
+} catch (error) {
+  console.error('Error adding records', error);
+  throw new Error('Error adding records');
+}
+}
+
+
+      // return {
+      //   reply: reply,
+      // };
+      
+    } catch (error) {
+      console.error('Error contacting Anthropic API:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error contacting Anthropic API' },
+      };
+    }
+  },
+
+
+  loadEmail: async ({ request, locals: {  supabase, getSession } }) => {
+
+    const formData = await request.formData()
+    // const formData = await request.json(); // Assuming the request data is sent as JSON
+
+   
+
+
+    console.log("FORM DATAAAA",formData)
+
+    const currentEmailSequenceId = Number(formData.get("emailSequenceId"))
+    const currentEmailIndex = Number(formData.get("currentEmailIndex"))
+    
+
+    let currentEmail, previousEmailId, nextEmailId, currentEmailId,currentPrompt;
+   
+    
+    const session = await getSession();
+    const userId = session?.user.id
+    // console.log("SESSION DETAILS",session)
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+
+    try {
+      // ... (existing code)
+
+      // Save the generated content to the user's profile in Supabase
+      const { currentEmail,previousEmailId,nextEmailId,currentEmailId,currentPrompt } = await loadEmailA();
+
+      console.log('FETCHED REPLY------',currentEmail)
+      console.log("PREVIOUS EMAIL ID------",previousEmailId)
+      console.log("NEXT EMAIL ID------", nextEmailId)
+      console.log("CURRENT EMAIL ID------",currentEmailId)
+      
+   return {
+    status: 200,
+    body: { reply: currentEmail, previousEmailId:previousEmailId, nextEmailId:nextEmailId, currentEmailId:currentEmailId,currentPrompt:currentPrompt},
+  }
+      
+
+    } catch (error) {
+      console.error('Error saving email:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error saving email' },
+      };
+    }
+
+    // Function to create or update the "email_sequence" row for the user
+    async function loadEmailA() {
+      
+    
+      try {
+        // Fetch current email
+        const { data: currentEmailData, error: currentEmailError } = await supabase
+          .from('emails')
+          .select()
+          .eq('sequence_id', currentEmailSequenceId)
+          .eq('index', currentEmailIndex);
+    
+        currentEmail = currentEmailData[0]?.content;
+        currentEmailId = currentEmailData[0]?.id;
+        currentPrompt = currentEmailData[0]?.prompt;
+        console.log("CURRENT EMAIL ID---",currentEmailId);
+        console.log("CURRENT EMAIL PROMPT---",currentPrompt);
+        if (currentEmailError) {
+          console.error('Error fetching current email:', currentEmailError);
+          throw new Error('Error fetching current email');
+        }
+    
+        if (!currentEmailData || currentEmailData.length === 0) {
+          throw new Error('Failed to fetch current email');
+        }
+    
+        // Fetch previous email
+        
+        const { data: previousEmailData, error: previousEmailError } = await supabase
+          .from('emails')
+          .select()
+          .eq('sequence_id', currentEmailSequenceId)
+          .eq('index', currentEmailIndex - 1);
+    
+          previousEmailId = previousEmailData.length > 0 ? previousEmailData[0]?.id : '';
+          console.log("PREVIOUS EMAIL ID---",previousEmailId)
+
+        // Fetch next email
+        const { data: nextEmailData, error: nextEmailError } = await supabase
+          .from('emails')
+          .select()
+          .eq('sequence_id', currentEmailSequenceId)
+          .eq('index', currentEmailIndex + 1);
+    
+          nextEmailId = nextEmailData.length > 0 ? nextEmailData[0]?.id : null;
+          console.log("NEXT EMAIL ID---", nextEmailId)
+    
+        if (previousEmailError || nextEmailError) {
+          console.error('Error fetching adjacent emails:', previousEmailError || nextEmailError);
+          throw new Error('Error fetching adjacent emails');
+        }
+    
+        
+    
+        return { currentEmail, previousEmailId, nextEmailId,currentEmailId,currentPrompt };
+      } catch (error) {
+        console.error('Error fetching emails', error);
+        throw new Error('Error fetching emails');
+      }
+    }
+  },
+  
+
+  getEmailSequences: async ({ locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+    try {
+      // Fetch email sequences for the logged-in user
+      const { data: emailSequences, error } = await supabase
+        .from('email_sequences')
+        .select()
+        .eq('user_id', userId);
+        console.log("FETCH SEQUENCES",emailSequences)
+        
+      if (error) {
+        console.error('Error fetching email sequences:', error);
+        throw new Error('Error fetching email sequences');
+      }
+
+      return {
+       
+        body: JSON.stringify(emailSequences)
+      };
+      
+    } catch (error) {
+      console.error('Error fetching email sequences:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error fetching email sequences' },
+      };
+    }
+  },
+ 
+  saveSequenceName: async ({ request, locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+    const formData = await request.formData()
+    // const formData = await request.json(); // Assuming the request data is sent as JSON
+
+   
+
+
+    console.log("SAVE NAME FORM DATAAAA",formData)
+
+    // const userId = Number(formData.get("currentSequenceId"))
+    const currentSequenceId = Number(formData.get("currentSequenceId"))
+    const newName =formData.get("newName") as string
+
+    try {
+      console.log("Updating Name for Sequence", currentSequenceId)
+      console.log("New Name", newName)
+
+      const { data, error } = await supabase
+        .from("email_sequences")
+        .update({ name: newName })
+        .eq("user_id", userId)
+        .eq("id", currentSequenceId)
+        .select()
+
+      console.log("Updated sequence name:", data)
+        
+      if (error) {
+        console.error('Error fetching email sequences:', error);
+        throw new Error('Error fetching email sequences');
+      }
+
+      return {
+       
+        body: JSON.stringify(data)
+      };
+      
+    } catch (error) {
+      console.error('Error fetching email sequences:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error fetching email sequences' },
+      };
+    }
+  },
+
 }
