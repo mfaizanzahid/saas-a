@@ -1,7 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit"
 
 import Anthropic from '@anthropic-ai/sdk';
-import { PRIVATE_ANTHROPIC_API_KEY } from "$env/static/private";
+import { PRIVATE_ANTHROPIC_API_KEY } from "$env/static/public";
 
 const anthropic = new Anthropic({
   apiKey: PRIVATE_ANTHROPIC_API_KEY,
