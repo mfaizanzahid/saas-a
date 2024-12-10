@@ -6,6 +6,7 @@ env:
   PUBLIC_SUPABASE_URL: 'https://fake_test_url.supabase.co'
   PUBLIC_SUPABASE_ANON_KEY: 'fake_anon_key'
   PRIVATE_SUPABASE_SERVICE_ROLE: 'fake_service_role'
+  PRIVATE_ANTHROPIC_API_KEY: 'fake_anthropic_api_key'
   PRIVATE_STRIPE_API_KEY: 'fake_strip_api_key'
   PUBLIC_SITE_NAME: 'SaaS Starter Build Test'
 
