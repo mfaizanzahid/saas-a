@@ -260,30 +260,45 @@ export const actions = {
   },
 
   generateAnthropicReply: async ({ request, locals: {  supabase, getSession } }) => {
+console.log("WE ARE IN THE BACKEND GENERATE")
+
+let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply="",promptAdd=""
+
 
     const formData = await request.formData()
     // const formData = await request.json(); // Assuming the request data is sent as JSON
+    const businessDescription = formData.get("businessDescription");
+    const targetAudience = formData.get("targetAudience");
+    const objective = formData.get("objective");
+    const creativity = formData.get("creativity");
+    const problemFocus = formData.get("problemFocus");
+    const solution = formData.get("solution");
+    const emailToRewrite = formData.get("emailToRewrite");
+    const wordCount = formData.get("wordCount");
 
-   
+    reply = formData.get("reply") as string ?? null;
+    
+    prompt = formData.get("prompt") as string ?? null;
 
-
+    console.log("businessDescription,targetAudience,objective,creativity,problemFocus,solution,emailToRewrite,wordCount",businessDescription,targetAudience,objective,creativity,problemFocus,solution,emailToRewrite,wordCount)
     console.log("FORM DATAAAA",formData)
 
-    const promptA = formData.get("fullPrompt") as string
+    // const promptA = formData.get("fullPrompt") as string
 
     const newEmailId = formData.get("emailId") as string ?? null
     const newEmailSequenceId = formData.get("emailSequenceId") as string ?? null
-    const currentEmailIndex = formData.get("currentEmailIndex")
+    const currentEmailIndex = Number(formData.get("currentEmailIndex"))
     const steps = formData.get("steps")
-    const wordCount = formData.get("wordCount") as string
+    // const wordCount = formData.get("wordCount") as string
 
-    console.log("EXISTING EMAIL IDSSSSSSSS",formData.get("emailId"))
-    console.log("EXISTING SEQ IDSSSSSSSS",formData.get("emailSequenceId"))
+    console.log("CURRENT EMAIL INDEX",currentEmailIndex)
+    console.log("EXISTING EMAIL IDSSSSSSSS",newEmailId)
+    console.log("EXISTING SEQ IDSSSSSSSS",newEmailSequenceId)
     
 
-    console.log("PROMPTA",promptA)
-    const prompt = JSON.parse(promptA)
-    console.log("PROMPT",prompt)
+    // console.log("PROMPTA",promptA)
+    // const prompt = JSON.parse(promptA)
+    // console.log("PROMPT",prompt)
     const session = await getSession();
     const userId = session?.user.id
     // console.log("SESSION DETAILS",session)
@@ -294,14 +309,90 @@ export const actions = {
       };
     }
 
+    modelInstructions = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
+
+Here's The Problem With Sales Letters
+
+I'm an entrepreneur.
+
+And the clients I work with are entrepreneurs.
+
+The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
+
+They want to sell.
+
+And they wanna sell FAST.
+
+They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
+
+I don't know about you…
+
+But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
+
+ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
+
+Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
+
+Hey… some people love that process.
+
+But that's not me.
+
+I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
+
+So, I made it my mission to learn how to write sales letters fast.
+
+I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!`
+
+firstPrompt = `I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
+
+
+
+if (currentEmailIndex==1) {
+    promptA = `[{"role": "user", "content": "${firstPrompt
+      .replace(/\n/g, "\\n")
+      .replace(/&/g, "\\&")
+      .replace(/"/g, '\\"')
+      .replace(
+        /\u00A0/g,
+        " ",
+      )} ${emailToRewrite.replace(/\n/g, "\\n")}" }]`
+
+      
+      prompt = JSON.parse(promptA)
+console.log("PROMPT",prompt)
+
+} else {
+  console.log("WE ARE HERE CREATING THE PROMPT")
+
+  nextPrompt = `Write email # ${currentEmailIndex} of ${wordCount}`
+
+  promptA = `[${prompt},{"role": "assistant", "content": "${reply
+    .replace(/\n/g, "\\n")
+    .replace(/&/g, "\\&")
+    .replace(/"/g, '\\"')
+    .replace(
+      /\u00A0/g,
+      " ",
+    )}"},{"role": "user", "content": "${nextPrompt}"}]`
+
+    console.log("CHECK NEXT PROMPT",promptA)
+
+
+    prompt = JSON.parse(promptA)
+   
+}
+
+promptAdd = promptA.replace(/\[|\]/g, '')
+
+//GENERATE COPY
     try {
       const message = await anthropic.messages.create({
         max_tokens: 1024,
-        system:'You are a long-form senior copywriter.',
+        system: modelInstructions,
         messages: prompt,
         model: 'claude-3-5-haiku-latest',
       });
-      // console.log("MESSAGEEEEEEE",message)
+      console.log("ANTHROPIC MESSAGEEEEEEEEEEEEEEEEE",message)
 
 
       console.log("REPLY",message.content);
@@ -322,15 +413,15 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       // Save the generated content to the user's profile in Supabase
       const { updatedEmailId, updatedEmailSequenceId }= await createEmailSequence();
 
-      console.log('EMAIL IDS 222',updatedEmailId,updatedEmailSequenceId)
+      console.log('EMAIL IDS 222',updatedEmailId,updatedEmailSequenceId,promptAdd)
 
 
       
    return {
     status: 200,
-    body: { reply: reply, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId,},
+    body: { reply: reply, prompt:promptAdd, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId},
   }
-      
+
 
     } catch (error) {
       console.error('Error saving email:', error);
@@ -343,6 +434,8 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
     // Function to create or update the "email_sequence" row for the user
     async function createEmailSequence() {
       let updatedEmailId, updatedEmailSequenceId;
+
+      // promptAdd = promptA.replace(/\[|\]/g, '')
 
       try {
         // Create a new email sequence
@@ -374,7 +467,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         // Add a new email linked to the created email_sequence
         console.log("NEW EMAIL IDDDDDDD",newEmailId)
 
-        const promptAdd = promptA.replace(/\[|\]/g, '')
+         
         
     const { data: newEmail, error: newEmailError } = await supabase
 

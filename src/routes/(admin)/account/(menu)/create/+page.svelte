@@ -57,12 +57,12 @@
   let creativityOptions = ["Low", "Medium", "High"]
 
   let isLoading = false
-  let reply = null
+  let reply = ""
   let currentEmailId = ""
   let currentEmailSequenceId = ""
   let currentEmailSequenceName = ""
   let modelInstructions,
-    prompt,
+    prompt = "",
     nextPrompt,
     previousEmailId,
     nextEmailId,
@@ -132,59 +132,6 @@
     }
   }
 
-  // async function handleRowClick(emailSequence) {
-  //   // Update values for the first email in the sequence
-  //   currentEmailIndex = 1
-  //   currentEmailSequenceId = emailSequence.id
-
-  //   isLoading = true
-
-  //   // Fetch the details of the first email in the sequence
-
-  //   const formDataString = `emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
-
-  //   try {
-  //     const response = await fetch("/account/api?/loadEmail", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/x-www-form-urlencoded",
-  //       },
-  //       body: formDataString,
-  //     })
-
-  //     if (response.ok) {
-  //       const result = await response.json()
-
-  //       const jsonData = JSON.parse(result.data)
-
-  //       const replyValue = jsonData[3]
-  //       previousEmailId = jsonData[4]
-  //       nextEmailId = jsonData[5]
-  //       currentEmailId = jsonData[6]
-
-  //       reply = replyValue
-  //       // Update the reply variable with the fetched data
-  //       // reply = reply;
-
-  //       console.log("CURRENT IDS", currentEmailId)
-  //       console.log("PREVIOUS IDS", previousEmailId)
-  //       console.log("NEXT IDS", nextEmailId)
-
-  //       console.log("FETCHED RESULT", jsonData)
-
-  //       // Hide the table and show the form
-  //     } else {
-  //       console.error("Failed to fetch email details")
-  //     }
-  //   } catch (error) {
-  //     console.error("Error contacting Anthropic API:", error)
-  //     // Handle error appropriately
-  //   } finally {
-  //     isLoading = false
-  //     showForm.set(false)
-  //   }
-  // }
-
   function formatDate(dateString) {
     let date = new Date(dateString)
     let options = {
@@ -220,50 +167,50 @@
     previousEmailId = null
     nextEmailId = null
 
-    modelInstructions = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
+    //     modelInstructions = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
 
-Here's The Problem With Sales Letters
+    // Here's The Problem With Sales Letters
 
-I'm an entrepreneur.
+    // I'm an entrepreneur.
 
-And the clients I work with are entrepreneurs.
+    // And the clients I work with are entrepreneurs.
 
-The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
+    // The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
 
-They want to sell.
+    // They want to sell.
 
-And they wanna sell FAST.
+    // And they wanna sell FAST.
 
-They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
+    // They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
 
-I don't know about you…
+    // I don't know about you…
 
-But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
+    // But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
 
-ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
+    // ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
 
-Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
+    // Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
 
-Hey… some people love that process.
+    // Hey… some people love that process.
 
-But that's not me.
+    // But that's not me.
 
-I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
+    // I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
 
-So, I made it my mission to learn how to write sales letters fast.
+    // So, I made it my mission to learn how to write sales letters fast.
 
-I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!
+    // I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!
 
-I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
+    // I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
 
-    prompt = `{ "role": "user", "content": "${modelInstructions
-      .replace(/\n/g, "\\n")
-      .replace(/&/g, "\\&")
-      .replace(/"/g, '\\"')
-      .replace(
-        /\u00A0/g,
-        " ",
-      )} ${formData.emailToRewrite.replace(/\n/g, "\\n")}" }`
+    //     prompt = `{ "role": "user", "content": "${modelInstructions
+    //       .replace(/\n/g, "\\n")
+    //       .replace(/&/g, "\\&")
+    //       .replace(/"/g, '\\"')
+    //       .replace(
+    //         /\u00A0/g,
+    //         " ",
+    //       )} ${formData.emailToRewrite.replace(/\n/g, "\\n")}" }`
 
     await handleGenerate()
   }
@@ -279,7 +226,25 @@ I want you to rewrite the following email as a long-form email copy in your uniq
     console.log("EMAIL ID", currentEmailId)
     console.log("EMAIL SEQ", currentEmailSequenceId)
 
-    const formDataString = `fullPrompt=[${prompt}]&emailId=${currentEmailId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}&steps=${formData.numEmails}&wordCount=${formData.wordCount}`
+    // const formDataString = `fullPrompt=[${prompt}]&emailId=${currentEmailId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}&steps=${formData.numEmails}&wordCount=${formData.wordCount}`
+    const formDataString = new URLSearchParams({
+      emailId: currentEmailId,
+      emailSequenceId: currentEmailSequenceId,
+      currentEmailIndex: currentEmailIndex.toString(),
+      steps: formData.numEmails.toString(),
+      wordCount: formData.wordCount,
+      businessDescription: formData.businessDescription,
+      targetAudience: formData.targetAudience,
+      objective: formData.objective,
+      creativity: formData.creativity,
+      problemFocus: formData.problemFocus,
+      solution: formData.solution,
+      emailToRewrite: formData.emailToRewrite,
+      reply: reply,
+      prompt: prompt,
+    }).toString()
+
+    console.log("FORM DATA STRING", formDataString)
 
     try {
       const response = await fetch("/account/api?/generateAnthropicReply", {
@@ -296,8 +261,10 @@ I want you to rewrite the following email as a long-form email copy in your uniq
         const jsonData = JSON.parse(result.data)
 
         const replyValue = jsonData[3]
-        currentEmailSequenceId = jsonData[5]
-        currentEmailId = jsonData[4]
+        prompt = jsonData[4]
+        currentEmailSequenceId =
+          jsonData.length === 7 ? jsonData[6] : jsonData[5]
+        currentEmailId = jsonData[5]
 
         reply = replyValue
         // Update the reply variable with the fetched data
@@ -307,6 +274,8 @@ I want you to rewrite the following email as a long-form email copy in your uniq
         console.log("EXTRATCTED", reply)
 
         console.log("RESULT", jsonData)
+        console.log("SEQ ID", currentEmailSequenceId)
+        console.log("EMAIL ID", currentEmailId)
       } else {
         console.error("Anthropic API request failed")
         // Handle error appropriately
@@ -402,32 +371,6 @@ I want you to rewrite the following email as a long-form email copy in your uniq
   }
 
   onMount(fetchEmailSequences)
-
-  // onMount(async () => {
-  //   const response = await fetch("/account/api?/getEmailSequences", {
-  //     method: "POST",
-  //     headers: {
-  //       "Content-Type": "application/x-www-form-urlencoded",
-  //     },
-  //   })
-  //   if (response.ok) {
-  //     // console.log("RESPONSE", response)
-
-  //     const result = await response.json()
-
-  //     const jsonData = JSON.parse(result.data)
-
-  //     console.log("FETCHED SEQUENCES JSON DATA", jsonData[1])
-  //     const jsonDataC = JSON.parse(jsonData[1])
-
-  //     emailSequences.set(jsonDataC)
-
-  //     isLoadingSequences = false
-  //     console.log("EMAIL SEQUENCESSSSS", $emailSequences)
-  //   } else {
-  //     console.error("Failed to fetch email sequences")
-  //   }
-  // })
 
   async function toggleShowForm() {
     showForm.set(true)
@@ -687,15 +630,12 @@ I want you to rewrite the following email as a long-form email copy in your uniq
               currentEmailId = ""
 
               // currentEmailSequenceId = ""
-              nextPrompt = `Write email # ${currentEmailIndex} of ${formData.wordCount}`
-              prompt = `${prompt},{"role": "assistant", "content": "${reply
-                .replace(/\n/g, "\\n")
-                .replace(/&/g, "\\&")
-                .replace(/"/g, '\\"')
-                .replace(
-                  /\u00A0/g,
-                  " ",
-                )}"},{"role": "user", "content": "${nextPrompt}"}`
+              // nextPrompt = `Write email # ${currentEmailIndex} of ${formData.wordCount}`
+              // prompt = `{"role": "assistant", "content": "${reply
+              //   .replace(/\n/g, "\\n")
+              //   .replace(/&/g, "\\&")
+              //   .replace(/"/g, '\\"')
+              //   .replace(/\u00A0/g, " ")}"}`
               console.log("PREVIOUS EMAIL ID", previousEmailId)
               handleGenerate()
             }}
