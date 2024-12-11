@@ -11,7 +11,7 @@
   const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY)
 
   let adminSection: Writable<String> = getContext("adminSection")
-  adminSection.set("billing")
+  adminSection.set("create")
 
   let formData = {
     businessDescription: "",
