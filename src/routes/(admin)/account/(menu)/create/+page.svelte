@@ -75,6 +75,7 @@
   let showForm = writable(false)
 
   let isModalOpen = false
+  let isDeleteModalOpen = false
   let currentSequence
   let newName = ""
   let userId
@@ -84,6 +85,8 @@
   let isCopyTypeModalOpen = false
   let copyTypes = writable([])
   let selectedCopyType = null
+  let currentPage = 1 // Keeps track of the current page
+  let isLoadingMore = false // Loading state for pagination
 
   function openRenameModal(sequence) {
     currentSequence = sequence
@@ -95,8 +98,22 @@
     console.log("OPEN MODAL", currentSequence, newName, isModalOpen)
   }
 
+  function openDeleteModal(sequence) {
+    currentSequence = sequence
+    newName = sequence.name
+    userId = sequence.user_id
+    currentSequenceId = sequence.id
+    isDeleteModalOpen = true
+
+    console.log("OPEN MODAL", currentSequence, newName, isModalOpen)
+  }
+
   function closeRenameModal() {
     isModalOpen = false
+  }
+
+  function closeDeleteModal() {
+    isDeleteModalOpen = false
   }
 
   async function saveName() {
@@ -130,6 +147,41 @@
       }
     } catch (error) {
       console.error("Error updating sequence name:", error.message)
+      // Handle error
+    } finally {
+      isSaving = false
+    }
+  }
+
+  async function deleteEmailSequence() {
+    isSaving = true
+    const formDataString = `currentSequenceId=${currentSequenceId}&userId=${userId}`
+    console.log("DELETE EMAIL SEQUENCE??????", formDataString)
+    // Delete the sequence name in the Supabase database
+    try {
+      const response = await fetch("/account/api?/deleteEmailSequence", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formDataString,
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        const jsonData = JSON.parse(result.data)
+        console.log("RESULT", jsonData)
+        // const newNameValue = jsonData[3]
+        // newName = newNameValue
+
+        closeDeleteModal()
+        fetchEmailSequences()
+      } else {
+        console.error("Delete Sequence failed")
+        // Handle error appropriately
+      }
+    } catch (error) {
+      console.error("Error deleting sequence:", error.message)
       // Handle error
     } finally {
       isSaving = false
@@ -323,7 +375,7 @@
       emailSequences.set(sortedSequences)
 
       // emailSequences.set(jsonDataC)
-
+      isLoadingSequences = false
       console.log("EMAIL SEQUENCESSSSS", $emailSequences)
     } else {
       console.error("Failed to fetch email sequences")
@@ -345,8 +397,6 @@
       console.log("JSON C", jsonCopyTypeDataC)
       copyTypes.set(jsonCopyTypeDataC)
       console.log("COPY TYPES", $copyTypes)
-
-      isLoadingSequences = false
     } else {
       console.error("Failed to fetch copy types")
     }
@@ -389,7 +439,11 @@
   {/if}
 </div>
 
-<main class="main-content {isCopyTypeModalOpen ? 'blurred' : ''}">
+<main
+  class="main-content {isCopyTypeModalOpen || isDeleteModalOpen
+    ? 'blurred'
+    : ''}"
+>
   {#if isLoading || isLoadingSequences}
     <div class="spinner-container">
       <span class="loading loading-dots loading-lg text-primary"></span>
@@ -729,6 +783,14 @@
                 Rename
               </button>
             </td>
+            <td>
+              <button
+                class="btn btn-outline"
+                on:click={() => openDeleteModal(emailSequence)}
+              >
+                Delete
+              </button>
+            </td>
 
             <!-- Add other table cells as needed -->
           </tr>
@@ -751,6 +813,36 @@
   </div>
 {/if}
 
+{#if isDeleteModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeDeleteModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <h3>Confirm Delete?</h3>
+
+      <ul>
+        <li>
+          <button
+            class="red"
+            on:click={deleteEmailSequence}
+            disabled={isSaving}
+          >
+            {#if isSaving}Deleting...{:else}Delete{/if}
+          </button>
+        </li>
+        <li>
+          <button on:click={closeDeleteModal} disabled={isSaving}>
+            Cancel
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+{/if}
+
 {#if isCopyTypeModalOpen}
   <div
     class="modal-backdrop"
@@ -769,8 +861,7 @@
           </li>
         {/each}
       </ul>
-      <button class="cancel-button" on:click={closeCopyTypeModal}>Cancel</button
-      >
+      <button class="red" on:click={closeCopyTypeModal}>Cancel</button>
     </div>
   </div>
 {/if}
@@ -987,11 +1078,11 @@
   }
 
   /* Cancel button styling */
-  .copy-type-modal button.cancel-button {
+  .copy-type-modal button.red {
     background: #d9534f; /* Red for cancel */
   }
 
-  .copy-type-modal button.cancel-button:hover {
+  .copy-type-modal button.red:hover {
     background: #c9302c;
   }
 </style>

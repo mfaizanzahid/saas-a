@@ -739,7 +739,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         body: { errorMessage: 'User not authenticated' },
       };
     }
-
+// console.log("FETCHING COPY TYPES")
     try {
       // Fetch email sequences for the logged-in user
       const { data: copyTypes, error } = await supabase
@@ -797,7 +797,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       console.log("New Name", newName)
 
       const { data, error } = await supabase
-        .from("email_sequences")
+        .from("copy_collection")
         .update({ name: newName })
         .eq("user_id", userId)
         .eq("id", currentSequenceId)
@@ -823,5 +823,51 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       };
     }
   },
+
+
+  
+  deleteEmailSequence: async ({ request, locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,  
+        body: { errorMessage: 'User not authenticated' },
+      };
+    } 
+
+    const formData = await request.formData();
+    const currentSequenceId = Number(formData.get("currentSequenceId"));
+
+    try {
+      const { data, error } = await supabase
+        .from("copy_collection")
+        .delete()
+        .eq("user_id", userId)
+        .eq("id", currentSequenceId)
+        .select();
+console.log("DELETED SEQUENCE",data)
+      if (error) {
+        console.error('Error deleting email sequence:', error);
+        throw new Error('Error deleting email sequence');
+      }
+
+      return {
+        status: 200,
+        body: JSON.stringify(data),
+      };
+    } catch (error) {
+      console.error('Error deleting email sequence:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error deleting email sequence' },
+      }
+
+}
+  },
+
+
+
 
 }
