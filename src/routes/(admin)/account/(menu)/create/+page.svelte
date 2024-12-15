@@ -81,6 +81,10 @@
   let currentSequenceId
   let isSaving = false
 
+  let isCopyTypeModalOpen = false
+  let copyTypes = writable([])
+  let selectedCopyType = null
+
   function openRenameModal(sequence) {
     currentSequence = sequence
     newName = sequence.name
@@ -167,51 +171,6 @@
     previousEmailId = null
     nextEmailId = null
 
-    //     modelInstructions = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
-
-    // Here's The Problem With Sales Letters
-
-    // I'm an entrepreneur.
-
-    // And the clients I work with are entrepreneurs.
-
-    // The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
-
-    // They want to sell.
-
-    // And they wanna sell FAST.
-
-    // They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
-
-    // I don't know about you…
-
-    // But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
-
-    // ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
-
-    // Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
-
-    // Hey… some people love that process.
-
-    // But that's not me.
-
-    // I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
-
-    // So, I made it my mission to learn how to write sales letters fast.
-
-    // I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!
-
-    // I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
-
-    //     prompt = `{ "role": "user", "content": "${modelInstructions
-    //       .replace(/\n/g, "\\n")
-    //       .replace(/&/g, "\\&")
-    //       .replace(/"/g, '\\"')
-    //       .replace(
-    //         /\u00A0/g,
-    //         " ",
-    //       )} ${formData.emailToRewrite.replace(/\n/g, "\\n")}" }`
-
     await handleGenerate()
   }
 
@@ -241,7 +200,9 @@
       solution: formData.solution,
       emailToRewrite: formData.emailToRewrite,
       reply: reply,
-      prompt: prompt,
+      copyType: selectedCopyType,
+      previousEmailId: previousEmailId,
+      // prompt: prompt,
     }).toString()
 
     console.log("FORM DATA STRING", formDataString)
@@ -261,10 +222,9 @@
         const jsonData = JSON.parse(result.data)
 
         const replyValue = jsonData[3]
-        prompt = jsonData[4]
         currentEmailSequenceId =
-          jsonData.length === 7 ? jsonData[6] : jsonData[5]
-        currentEmailId = jsonData[5]
+          jsonData.length === 6 ? jsonData[5] : jsonData[4]
+        currentEmailId = jsonData[4]
 
         reply = replyValue
         // Update the reply variable with the fetched data
@@ -298,7 +258,7 @@
     //   .join('&')
     console.log("EMAIL ID", currentEmailId)
     console.log("EMAIL SEQ", currentEmailSequenceId)
-
+    console.log("LOADED COPY TYPE", selectedCopyType)
     const formDataString = `emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
 
     try {
@@ -319,7 +279,7 @@
         previousEmailId = jsonData[4]
         nextEmailId = jsonData[5]
         currentEmailId = jsonData[6]
-        prompt = jsonData[7]
+        // prompt = jsonData[7]
 
         reply = replyValue
         // Update the reply variable with the fetched data
@@ -328,7 +288,7 @@
         console.log("CURRENT IDS", currentEmailId)
         console.log("PREVIOUS IDS", previousEmailId)
         console.log("NEXT IDS", nextEmailId)
-        console.log("CURRENT PROMPT", prompt)
+        // console.log("CURRENT PROMPT", prompt)
 
         console.log("FETCHED RESULT", jsonData)
       } else {
@@ -363,14 +323,41 @@
       emailSequences.set(sortedSequences)
 
       // emailSequences.set(jsonDataC)
-      isLoadingSequences = false
+
       console.log("EMAIL SEQUENCESSSSS", $emailSequences)
     } else {
       console.error("Failed to fetch email sequences")
     }
   }
 
-  onMount(fetchEmailSequences)
+  async function fetchCopyTypes() {
+    const response = await fetch("/account/api?/fetchCopyTypes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    })
+    if (response.ok) {
+      const result = await response.json()
+      const jsonCopyTypeData = JSON.parse(result.data)
+      const jsonCopyTypeDataC = JSON.parse(jsonCopyTypeData[1])
+
+      console.log("JSON C", jsonCopyTypeDataC)
+      copyTypes.set(jsonCopyTypeDataC)
+      console.log("COPY TYPES", $copyTypes)
+
+      isLoadingSequences = false
+    } else {
+      console.error("Failed to fetch copy types")
+    }
+  }
+
+  // onMount(fetchEmailSequences)
+
+  onMount(() => {
+    fetchEmailSequences()
+    fetchCopyTypes()
+  })
 
   async function toggleShowForm() {
     showForm.set(true)
@@ -378,16 +365,39 @@
   async function toggleHideForm() {
     showForm.set(false)
   }
+
+  function openCopyTypeModal() {
+    isCopyTypeModalOpen = true
+  }
+
+  function handleCopyTypeSelection(type: string) {
+    selectedCopyType = type.name
+    isCopyTypeModalOpen = false
+    showForm.set(true) // Show the form after selection
+    console.log("SELECTED COPY TYPE", selectedCopyType)
+  }
+
+  function closeCopyTypeModal() {
+    isCopyTypeModalOpen = false
+  }
 </script>
 
-<main>
+<div>
+  {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
+    <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
+    <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button>
+  {/if}
+</div>
+
+<main class="main-content {isCopyTypeModalOpen ? 'blurred' : ''}">
   {#if isLoading || isLoadingSequences}
     <div class="spinner-container">
       <span class="loading loading-dots loading-lg text-primary"></span>
     </div>
   {/if}
 
-  {#if !reply && !isLoading && $showForm}
+  <!-- {#if !reply && !isLoading && $showForm} -->
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Rewriter"}
     <form on:submit|preventDefault={handleSubmit} class="form-container">
       <div class="form-section">
         <label
@@ -536,6 +546,22 @@
       </div>
     </form>
   {/if}
+
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Long Form Email"}
+    <p>Displaying Long Form Email form...</p>
+    <!-- Long Form Email specific fields here -->
+  {/if}
+
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Offer Based Cold Email Sequence"}
+    <p>Displaying Offer Based Cold Email Sequence form...</p>
+    <!-- Offer Based Cold Email Sequence specific fields here -->
+  {/if}
+
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Value Based Cold Email Sequence"}
+    <p>Displaying Value Based Cold Email Sequence form...</p>
+    <!-- Value Based Cold Email Sequence specific fields here -->
+  {/if}
+
   {#if reply && !isLoading && !$showForm}
     <div>
       <div class="textarea-container">
@@ -659,7 +685,8 @@
   {/if}
 
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
-    <button class="plus-sign" on:click={toggleShowForm}>+</button>
+    <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
+    <!-- <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button> -->
     <table>
       <thead>
         <tr>
@@ -686,7 +713,7 @@
                   currentEmailSequenceName = emailSequence.name
                   formData.numEmails = emailSequence.steps
                   formData.wordCount = emailSequence.word_count
-
+                  selectedCopyType = emailSequence.copy_type
                   handleLoad()
                 }}
               >
@@ -724,6 +751,30 @@
   </div>
 {/if}
 
+{#if isCopyTypeModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeCopyTypeModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <h3>Select Copy Type</h3>
+      <ul>
+        {#each $copyTypes as type (type.id)}
+          <li>
+            <button on:click={() => handleCopyTypeSelection(type)}>
+              {type.name}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <button class="cancel-button" on:click={closeCopyTypeModal}>Cancel</button
+      >
+    </div>
+  </div>
+{/if}
+
 <style>
   main {
     background: rgba(255, 255, 255, 0); /* Transparent white background */
@@ -735,12 +786,12 @@
     position: absolute;
     top: 10px;
     right: 60px;
-    font-size: 24px;
+    font-size: 18px;
     background: #4caf50;
     color: white;
     border: none;
     padding: 10px 20px;
-    border-radius: 50%;
+    border-radius: 20px;
     cursor: pointer;
     z-index: 1000;
   }
@@ -839,5 +890,108 @@
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     z-index: 1000;
+  }
+  /* .copy-type-modal {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  animation: scaleUp 0.3s ease;
+}
+  .copy-type-modal ul {
+    list-style: none;
+    padding: 0;
+  }
+  .copy-type-modal li {
+    margin: 10px 0;
+  } */
+
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+  }
+  .copy-type-modal {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    animation: scaleUp 0.3s ease;
+  }
+  .main-content {
+    will-change: filter;
+  }
+  .main-content.blurred {
+    filter: blur(5px);
+    transition: filter 0.3s ease;
+  }
+  /* Animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleUp {
+    from {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Modal content */
+  .copy-type-modal h3 {
+    margin: 0 0 15px;
+    font-size: 1.5rem;
+    color: #333;
+  }
+
+  .copy-type-modal ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .copy-type-modal li {
+    margin: 10px 0;
+  }
+
+  .copy-type-modal button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    background: #4caf50;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .copy-type-modal button:hover {
+    background: #45a049;
+  }
+
+  /* Cancel button styling */
+  .copy-type-modal button.cancel-button {
+    background: #d9534f; /* Red for cancel */
+  }
+
+  .copy-type-modal button.cancel-button:hover {
+    background: #c9302c;
   }
 </style>

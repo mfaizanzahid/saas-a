@@ -262,7 +262,7 @@ export const actions = {
   generateAnthropicReply: async ({ request, locals: {  supabase, getSession } }) => {
 console.log("WE ARE IN THE BACKEND GENERATE")
 
-let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply="",promptAdd=""
+let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply="",promptAdd="",fetchPromptEmailIndex
 
 
     const formData = await request.formData()
@@ -275,6 +275,8 @@ let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply
     const solution = formData.get("solution");
     const emailToRewrite = formData.get("emailToRewrite");
     const wordCount = formData.get("wordCount");
+    const copyType = formData.get("copyType");
+    
 
     reply = formData.get("reply") as string ?? null;
     
@@ -287,15 +289,53 @@ let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply
 
     const newEmailId = formData.get("emailId") as string ?? null
     const newEmailSequenceId = formData.get("emailSequenceId") as string ?? null
+    const previousEmailId = formData.get("previousEmailId") as string ?? null
+    
     const currentEmailIndex = Number(formData.get("currentEmailIndex"))
     const steps = formData.get("steps")
     // const wordCount = formData.get("wordCount") as string
 
     console.log("CURRENT EMAIL INDEX",currentEmailIndex)
-    console.log("EXISTING EMAIL IDSSSSSSSS",newEmailId)
-    console.log("EXISTING SEQ IDSSSSSSSS",newEmailSequenceId)
-    
+    console.log("NEW EMAIL IDSSSSSSSS",newEmailId)
+    console.log("SEQ IDSSSSSSSS",newEmailSequenceId)
+    console.log("PREVIOUS EMAIL IDSSSSSSSS",previousEmailId)
 
+//FETCH PROMPT FROM DATABASE FOR CURRENT EMAIL IF IT EXISTS
+
+
+if (newEmailSequenceId) {
+
+
+if(previousEmailId) {
+  fetchPromptEmailIndex = currentEmailIndex - 1
+} else {fetchPromptEmailIndex = currentEmailIndex + 1}
+try {
+
+  const { data: currentEmailData, error: currentEmailError } = await supabase
+    .from('copies')
+    .select()
+    .eq('copy_collection_id', newEmailSequenceId)
+    .eq('index', fetchPromptEmailIndex);
+
+// console.log("DATABASE RESULT",currentEmailData)
+
+  prompt = currentEmailData[0]?.prompt;
+  console.log ("FETCHED CURRENT PROMPT",prompt)
+
+  if (currentEmailError) {
+    console.error('Error fetching current prompt:', currentEmailError);
+    throw new Error('Error fetching current prompt');
+  }
+
+  if (!currentEmailData || currentEmailData.length === 0) {
+    throw new Error('No records found');
+  }
+}catch (error) {
+  console.error('Error fetching current prompt', error);
+  throw new Error('Error fetching current prompt');
+}
+   
+}
     // console.log("PROMPTA",promptA)
     // const prompt = JSON.parse(promptA)
     // console.log("PROMPT",prompt)
@@ -347,7 +387,8 @@ firstPrompt = `I want you to rewrite the following email as a long-form email co
 
 
 
-if (currentEmailIndex==1) {
+if (currentEmailIndex==1 && !newEmailId) {
+  console.log("WE ARE HERE CREATING THE NEW PROMPT")
     promptA = `[{"role": "user", "content": "${firstPrompt
       .replace(/\n/g, "\\n")
       .replace(/&/g, "\\&")
@@ -359,10 +400,10 @@ if (currentEmailIndex==1) {
 
       
       prompt = JSON.parse(promptA)
-console.log("PROMPT",prompt)
+console.log("CHECK NEW PROMPT",prompt)
 
-} else {
-  console.log("WE ARE HERE CREATING THE PROMPT")
+} else if (currentEmailIndex>1) {
+  console.log("WE ARE HERE CREATING THE NEXT PROMPT")
 
   nextPrompt = `Write email # ${currentEmailIndex} of ${wordCount}`
 
@@ -380,7 +421,14 @@ console.log("PROMPT",prompt)
 
     prompt = JSON.parse(promptA)
    
+} else if (currentEmailIndex==1 && newEmailId) {
+  
+  promptA=`[${prompt}]`
+  prompt = JSON.parse(promptA)
+  console.log("USING EXISTING PROMPT",prompt)
 }
+
+
 
 promptAdd = promptA.replace(/\[|\]/g, '')
 
@@ -395,13 +443,13 @@ promptAdd = promptA.replace(/\[|\]/g, '')
       console.log("ANTHROPIC MESSAGEEEEEEEEEEEEEEEEE",message)
 
 
-      console.log("REPLY",message.content);
+      // console.log("REPLY",message.content);
       
 
       const messageContent = message.content
       const reply = message.content[0]?.text || ''
 
-      console.log('EXTRACTED',reply);
+      // console.log('EXTRACTED',reply);
 
 
 
@@ -419,7 +467,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       
    return {
     status: 200,
-    body: { reply: reply, prompt:promptAdd, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId},
+    body: { reply: reply, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId},
   }
 
 
@@ -442,13 +490,14 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         
         if (!newEmailSequenceId) {
         const { data: newEmailSequence, error: sequenceError } = await supabase
-          .from('email_sequences')
+          .from('copy_collection')
           .upsert([
             {
               user_id: userId,
               name: 'New Untitled Sequence',
               steps:steps,
               word_count: wordCount,
+              copy_type:copyType,
               ...(newEmailSequenceId ? { id: newEmailSequenceId } : {}),
               // created_at: new Date(),
             },
@@ -472,10 +521,10 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
     const { data: newEmail, error: newEmailError } = await supabase
 
 
-    .from('emails')
+    .from('copies')
     .upsert([
       {
-        sequence_id: updatedEmailSequenceId,
+        copy_collection_id: updatedEmailSequenceId,
         index: currentEmailIndex,
         content: reply,
         prompt:promptAdd,
@@ -483,7 +532,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       },
     ])
     .select();
-    console.log("ADDED EMAIL ADDED ID",newEmail,newEmail[0]?.id )
+    // console.log("ADDED EMAIL ADDED ID",newEmail,newEmail[0]?.id )
 
     updatedEmailId = newEmail[0]?.id
 
@@ -564,7 +613,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       
    return {
     status: 200,
-    body: { reply: currentEmail, previousEmailId:previousEmailId, nextEmailId:nextEmailId, currentEmailId:currentEmailId,currentPrompt:currentPrompt},
+    body: { reply: currentEmail, previousEmailId:previousEmailId, nextEmailId:nextEmailId, currentEmailId:currentEmailId},
   }
       
 
@@ -583,9 +632,9 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       try {
         // Fetch current email
         const { data: currentEmailData, error: currentEmailError } = await supabase
-          .from('emails')
+          .from('copies')
           .select()
-          .eq('sequence_id', currentEmailSequenceId)
+          .eq('copy_collection_id', currentEmailSequenceId)
           .eq('index', currentEmailIndex);
     
         currentEmail = currentEmailData[0]?.content;
@@ -605,9 +654,9 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         // Fetch previous email
         
         const { data: previousEmailData, error: previousEmailError } = await supabase
-          .from('emails')
+          .from('copies')
           .select()
-          .eq('sequence_id', currentEmailSequenceId)
+          .eq('copy_collection_id', currentEmailSequenceId)
           .eq('index', currentEmailIndex - 1);
     
           previousEmailId = previousEmailData.length > 0 ? previousEmailData[0]?.id : '';
@@ -615,9 +664,9 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
 
         // Fetch next email
         const { data: nextEmailData, error: nextEmailError } = await supabase
-          .from('emails')
+          .from('copies')
           .select()
-          .eq('sequence_id', currentEmailSequenceId)
+          .eq('copy_collection_id', currentEmailSequenceId)
           .eq('index', currentEmailIndex + 1);
     
           nextEmailId = nextEmailData.length > 0 ? nextEmailData[0]?.id : null;
@@ -653,10 +702,11 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
     try {
       // Fetch email sequences for the logged-in user
       const { data: emailSequences, error } = await supabase
-        .from('email_sequences')
+        .from('copy_collection')
         .select()
         .eq('user_id', userId);
-        console.log("FETCH SEQUENCES",emailSequences)
+        // console.log("FETCH SEQUENCES",emailSequences)
+        console.log("FETCHED SEQUENCES")
         
       if (error) {
         console.error('Error fetching email sequences:', error);
@@ -675,7 +725,49 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         body: { errorMessage: 'Error fetching email sequences' },
       };
     }
+
+
   },
+
+  fetchCopyTypes: async ({ locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+    try {
+      // Fetch email sequences for the logged-in user
+      const { data: copyTypes, error } = await supabase
+      .from('copy_types')
+      .select('id, name');
+        console.log("FETCHED COPY TYPES",copyTypes)
+        
+      if (error) {
+        console.error('Error fetching copy types', error);
+        throw new Error('Error fetching copy types');
+      }
+
+      return {
+       
+        body: JSON.stringify(copyTypes)
+      };
+      
+    } catch (error) {
+      console.error('Error fetching copy types:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error fetching copy types' },
+      };
+    }
+
+    
+  },
+
  
   saveSequenceName: async ({ request, locals: { supabase, getSession } }) => {
     const session = await getSession();
