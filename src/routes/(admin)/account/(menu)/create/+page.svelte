@@ -78,20 +78,25 @@
   let isDeleteModalOpen = false
   let currentSequence
   let newName = ""
-  let userId
+  // let userId
   let currentSequenceId
   let isSaving = false
 
   let isCopyTypeModalOpen = false
   let copyTypes = writable([])
   let selectedCopyType = null
-  let currentPage = 1 // Keeps track of the current page
-  let isLoadingMore = false // Loading state for pagination
+  let isLoadingNewSequences = false
+  let isLoadingSequences = true
+  let hasMoreRecords = true // Tracks if there are more records to load
+  let updatedRecordCount = 0
+
+  let currentPage = 1 // Tracks the current page
+  const itemsPerPage = 3 // Number of results per page
 
   function openRenameModal(sequence) {
     currentSequence = sequence
     newName = sequence.name
-    userId = sequence.user_id
+    // userId = sequence.user_id
     currentSequenceId = sequence.id
     isModalOpen = true
 
@@ -101,7 +106,7 @@
   function openDeleteModal(sequence) {
     currentSequence = sequence
     newName = sequence.name
-    userId = sequence.user_id
+    // userId = sequence.user_id
     currentSequenceId = sequence.id
     isDeleteModalOpen = true
 
@@ -120,7 +125,7 @@
     isSaving = true
     // console.log("SAVE NAME??????", currentSequence, newName, isModalOpen)
 
-    const formDataString = `currentSequenceId=${currentSequenceId}&userId=${userId}&newName=${newName}`
+    const formDataString = `currentSequenceId=${currentSequenceId}&newName=${newName}`
     console.log("SAVE NAME??????", formDataString)
     // Update the sequence name in the Supabase database
     try {
@@ -140,7 +145,7 @@
         // newName = newNameValue
 
         closeRenameModal()
-        fetchEmailSequences()
+        fetchUpdatedEmailSequences()
       } else {
         console.error("Update Name failed")
         // Handle error appropriately
@@ -155,7 +160,7 @@
 
   async function deleteEmailSequence() {
     isSaving = true
-    const formDataString = `currentSequenceId=${currentSequenceId}&userId=${userId}`
+    const formDataString = `currentSequenceId=${currentSequenceId}`
     console.log("DELETE EMAIL SEQUENCE??????", formDataString)
     // Delete the sequence name in the Supabase database
     try {
@@ -175,7 +180,7 @@
         // newName = newNameValue
 
         closeDeleteModal()
-        fetchEmailSequences()
+        fetchUpdatedEmailSequences()
       } else {
         console.error("Delete Sequence failed")
         // Handle error appropriately
@@ -355,30 +360,93 @@
     }
   }
 
-  let isLoadingSequences = false // Add this line
-
-  async function fetchEmailSequences() {
+  async function fetchEmailSequences(page = 1) {
+    // if (!hasMoreRecords) return // Exit if no more records or already loading
     isLoadingSequences = true
+
+    const formDataString = `page=${page}&limit=${itemsPerPage}`
 
     const response = await fetch("/account/api?/getEmailSequences", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
+      body: formDataString,
     })
     if (response.ok) {
       const result = await response.json()
       const jsonData = JSON.parse(result.data)
       const jsonDataC = JSON.parse(jsonData[1])
-      const sortedSequences = jsonDataC.sort((a, b) => b.id - a.id)
+      const sortedSequences = jsonDataC.sort(
+        (a, b) => b.updated_at - a.updated_at,
+      )
 
-      emailSequences.set(sortedSequences)
+      if (jsonDataC.length < itemsPerPage) {
+        hasMoreRecords = false // No more records to load
+      }
+
+      if (page === 1 || isSaving) {
+        // Replace the list on the first page load
+        emailSequences.set(jsonDataC)
+      } else {
+        // Append new results for subsequent pages
+        emailSequences.update((existing) => [...existing, ...jsonDataC])
+      }
+      updatedRecordCount = $emailSequences.length
+      console.log("UPDATED RECORD COUNT", updatedRecordCount)
 
       // emailSequences.set(jsonDataC)
       isLoadingSequences = false
       console.log("EMAIL SEQUENCESSSSS", $emailSequences)
     } else {
       console.error("Failed to fetch email sequences")
+    }
+  }
+
+  async function fetchUpdatedEmailSequences() {
+    // if (!hasMoreRecords) return // Exit if no more records or already loading
+    isLoadingSequences = true
+
+    const formDataString = `page=1&limit=${updatedRecordCount}`
+
+    const response = await fetch("/account/api?/getEmailSequences", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+    if (response.ok) {
+      const result = await response.json()
+      const jsonData = JSON.parse(result.data)
+      const jsonDataC = JSON.parse(jsonData[1])
+      const sortedSequences = jsonDataC.sort(
+        (a, b) => b.updated_at - a.updated_at,
+      )
+
+      emailSequences.set(jsonDataC)
+
+      // emailSequences.set(jsonDataC)
+      isLoadingSequences = false
+      console.log("EMAIL SEQUENCESSSSS", $emailSequences)
+    } else {
+      console.error("Failed to fetch email sequences")
+    }
+  }
+
+  async function loadMore() {
+    if (isLoadingNewSequences) return // Prevent multiple clicks
+    console.log("LOADING NEW SEQUENCES", isLoadingNewSequences)
+    isLoadingNewSequences = true
+
+    try {
+      console.log("LOADING NEW SEQUENCES", isLoadingNewSequences)
+      currentPage += 1
+      await fetchEmailSequences(currentPage) // Wait for the fetch operation to complete
+    } catch (error) {
+      console.error("Error loading sequences:", error)
+    } finally {
+      isLoadingNewSequences = false // Reset after loading completes
     }
   }
 
@@ -405,7 +473,7 @@
   // onMount(fetchEmailSequences)
 
   onMount(() => {
-    fetchEmailSequences()
+    fetchEmailSequences(currentPage)
     fetchCopyTypes()
   })
 
@@ -679,7 +747,7 @@
             reply = null
             previousEmailId = null
             nextEmailId = null
-            fetchEmailSequences()
+            // fetchEmailSequences()
           }}
           class="btn btn-primary"
           >{#if currentEmailIndex < formData.numEmails}Start Over
@@ -797,6 +865,17 @@
         {/each}
       </tbody>
     </table>
+    <button
+      class="btn btn-primary"
+      on:click={loadMore}
+      disabled={!hasMoreRecords || isLoadingNewSequences}
+    >
+      {#if !hasMoreRecords}
+        No More Records
+      {:else}
+        {isLoadingNewSequences ? "Loading..." : "Show More"}
+      {/if}
+    </button>
   {/if}
 </main>
 

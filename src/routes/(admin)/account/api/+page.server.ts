@@ -688,7 +688,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
   },
   
 
-  getEmailSequences: async ({ locals: { supabase, getSession } }) => {
+  getEmailSequences: async ({ request, locals: { supabase, getSession } }) => {
     const session = await getSession();
     const userId = session?.user.id;
 
@@ -698,14 +698,26 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         body: { errorMessage: 'User not authenticated' },
       };
     }
+    const formData = await request.formData()
+    console.log("FETCH SEQUENCES FORM DATAAAA",formData)
+    
+    const page = parseInt(formData.get('page'));
+  const limit = parseInt(formData.get('limit'));
+  const offset = (page - 1) * limit;
 
     try {
+
+        
       // Fetch email sequences for the logged-in user
+      
       const { data: emailSequences, error } = await supabase
-        .from('copy_collection')
-        .select()
-        .eq('user_id', userId);
-        // console.log("FETCH SEQUENCES",emailSequences)
+      .from('copy_collection')
+      .select('id,name,created_at,updated_at,steps,word_count,copy_type') //avoid passing user_id
+      // .select()
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+        console.log("FETCH SEQUENCES",emailSequences)
         console.log("FETCHED SEQUENCES")
         
       if (error) {
@@ -717,6 +729,8 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
        
         body: JSON.stringify(emailSequences)
       };
+
+     
       
     } catch (error) {
       console.error('Error fetching email sequences:', error);
@@ -866,6 +880,10 @@ console.log("DELETED SEQUENCE",data)
 
 }
   },
+
+
+
+
 
 
 
