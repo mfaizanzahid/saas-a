@@ -92,6 +92,7 @@
   let deletingSequence = false
   let deletingSelectedSequences = false
   let isRegenerate = 0
+  let isGenerating = false
 
   let currentPage = 1 // Tracks the current page
   const itemsPerPage = 10 // Number of results per page
@@ -260,6 +261,7 @@
 
   async function handleGenerate() {
     isLoading = true
+    isGenerating = true
     /*add 1 to updatedRecordCount to track the number of records fetched so far*/
     updatedRecordCount++
 
@@ -338,6 +340,7 @@
     } finally {
       isLoading = false
       isRegenerate = 0
+      isGenerating = false
       // Trigger the typing effect when the component mounts or reply updates
       typeText(reply)
     }
@@ -482,6 +485,10 @@
       console.log("LOADING NEW SEQUENCES", isLoadingNewSequences)
       currentPage += 1
       await fetchEmailSequences(currentPage) // Wait for the fetch operation to complete
+      window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth",
+      })
     } catch (error) {
       console.error("Error loading sequences:", error)
     } finally {
@@ -883,7 +890,7 @@
       <div class="button-container">
         <div class="all-caps">
           {currentEmailSequenceName} <br /> SEQUENCE ID # {currentEmailSequenceId}
-          / STEP # {currentEmailIndex}
+          / STEP # {currentEmailIndex} / TOTAL STEPS: {formData.numEmails}
         </div>
         <button
           on:click={() => {
@@ -1052,65 +1059,6 @@
         </div>
       {/each}
 
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>NAME</th>
-            <th>STEPS</th>
-            <th>MODIFIED</th>
-            <!-- Add other table headers as needed -->
-          </tr>
-        </thead>
-        <tbody>
-          {#each $emailSequences as emailSequence (emailSequence.id)}
-            <tr>
-              <td>{emailSequence.id}</td>
-              <td>{emailSequence.name}</td>
-              <td>{emailSequence.steps}</td>
-              <td>{formatDate(emailSequence.updated_at)}</td>
-              <td>
-                <button
-                  class="btn btn-outline"
-                  on:click={() => {
-                    currentEmailIndex = 1
-                    currentEmailSequenceId = emailSequence.id
-                    currentEmailSequenceName = emailSequence.name
-                    formData.numEmails = emailSequence.steps
-                    formData.wordCount = emailSequence.word_count
-                    selectedCopyType = emailSequence.copy_type
-                    handleLoad()
-                  }}
-                >
-                  Open
-                </button></td
-              >
-
-              <td>
-                <button
-                  class="btn btn-outline"
-                  on:click={() => openRenameModal(emailSequence)}
-                >
-                  Rename
-                </button>
-              </td>
-              <td>
-                <button
-                  class="btn btn-outline"
-                  on:click={() => {
-                    deletingSequence = true
-                    openDeleteModal(emailSequence)
-                  }}
-                >
-                  Delete
-                </button>
-              </td>
-
-              <!-- Add other table cells as needed -->
-            </tr>
-          {/each}
-        </tbody>
-      </table>
       <button
         class="btn btn-primary"
         on:click={loadMore}
@@ -1443,14 +1391,17 @@
 
   .sequence-name {
     cursor: pointer;
+    max-width: 80%;
   }
 
   @media (max-width: 768px) {
     .actions {
       display: flex;
-      /* position: relative; */
       margin-left: auto;
-      margin-right: -70px;
+      margin-right: 5px;
+      flex-direction: column;
+      /* position: relative; */
+      top: -15px;
     }
     .sequence-name {
       cursor: pointer;

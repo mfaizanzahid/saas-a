@@ -378,44 +378,6 @@ console.log("DATABASE RESULT",currentEmailData)
    console.log("NEXT PROMPT",nextPrompt)
 
 
-//     modelInstructions = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
-
-// Here's The Problem With Sales Letters
-
-// I'm an entrepreneur.
-
-// And the clients I work with are entrepreneurs.
-
-// The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
-
-// They want to sell.
-
-// And they wanna sell FAST.
-
-// They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
-
-// I don't know about you…
-
-// But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
-
-// ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
-
-// Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
-
-// Hey… some people love that process.
-
-// But that's not me.
-
-// I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
-
-// So, I made it my mission to learn how to write sales letters fast.
-
-// I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!`
-
-// firstPrompt = `I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
-
-
-
 if (currentEmailIndex==1 && !newEmailId) {
   console.log("WE ARE HERE CREATING THE NEW PROMPT")
     promptA = `[{"role": "user", "content": "${firstPrompt

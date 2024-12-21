@@ -11,7 +11,7 @@
   const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY)
 
   let adminSection: Writable<String> = getContext("adminSection")
-  adminSection.set("billing")
+  adminSection.set("create")
 
   let formData = {
     businessDescription: "",
@@ -57,12 +57,12 @@
   let creativityOptions = ["Low", "Medium", "High"]
 
   let isLoading = false
-  let reply = null
+  let reply = ""
   let currentEmailId = ""
   let currentEmailSequenceId = ""
   let currentEmailSequenceName = ""
-  let basePrompt,
-    prompt,
+  let modelInstructions,
+    prompt = "",
     nextPrompt,
     previousEmailId,
     nextEmailId,
@@ -75,31 +75,72 @@
   let showForm = writable(false)
 
   let isModalOpen = false
+  let isDeleteModalOpen = false
   let currentSequence
   let newName = ""
-  let userId
+  // let userId
   let currentSequenceId
   let isSaving = false
+
+  let isCopyTypeModalOpen = false
+  let copyTypes = writable([])
+  let selectedCopyType = null
+  let isLoadingNewSequences = false
+  let isLoadingSequences = true
+  let hasMoreRecords = true // Tracks if there are more records to load
+  let updatedRecordCount = 0
+  let deletingSequence = false
+  let deletingSelectedSequences = false
+  let isRegenerate = 0
+
+  let currentPage = 1 // Tracks the current page
+  const itemsPerPage = 10 // Number of results per page
+
+  // Store for email sequences and selection state
+  let isSelectionMode = writable(false)
+  let selectedSequences = writable(new Set())
+
+  let isTyping = false
+  let displayedText = "" // The text progressively shown with the typing effect
+  let typingSpeed = 2 // Adjust the typing speed (milliseconds per character)
 
   function openRenameModal(sequence) {
     currentSequence = sequence
     newName = sequence.name
-    userId = sequence.user_id
+    // userId = sequence.user_id
     currentSequenceId = sequence.id
     isModalOpen = true
 
     console.log("OPEN MODAL", currentSequence, newName, isModalOpen)
   }
 
+  function openDeleteModal(sequence) {
+    currentSequence = sequence
+    newName = sequence.name
+    // userId = sequence.user_id
+    currentSequenceId = sequence.id
+    isDeleteModalOpen = true
+
+    console.log("OPEN MODAL", currentSequence, newName, isModalOpen)
+  }
+
+  function openSelectedDeleteModal() {
+    isDeleteModalOpen = true
+  }
+
   function closeRenameModal() {
     isModalOpen = false
+  }
+
+  function closeDeleteModal() {
+    isDeleteModalOpen = false
   }
 
   async function saveName() {
     isSaving = true
     // console.log("SAVE NAME??????", currentSequence, newName, isModalOpen)
 
-    const formDataString = `currentSequenceId=${currentSequenceId}&userId=${userId}&newName=${newName}`
+    const formDataString = `currentSequenceId=${currentSequenceId}&newName=${newName}`
     console.log("SAVE NAME??????", formDataString)
     // Update the sequence name in the Supabase database
     try {
@@ -119,7 +160,7 @@
         // newName = newNameValue
 
         closeRenameModal()
-        fetchEmailSequences()
+        fetchUpdatedEmailSequences()
       } else {
         console.error("Update Name failed")
         // Handle error appropriately
@@ -132,58 +173,41 @@
     }
   }
 
-  // async function handleRowClick(emailSequence) {
-  //   // Update values for the first email in the sequence
-  //   currentEmailIndex = 1
-  //   currentEmailSequenceId = emailSequence.id
+  async function deleteEmailSequence() {
+    isSaving = true
+    const formDataString = `currentSequenceId=${currentSequenceId}`
+    console.log("DELETE EMAIL SEQUENCE??????", formDataString)
+    // Delete the sequence name in the Supabase database
+    try {
+      const response = await fetch("/account/api?/deleteEmailSequence", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formDataString,
+      })
 
-  //   isLoading = true
+      if (response.ok) {
+        const result = await response.json()
+        const jsonData = JSON.parse(result.data)
+        console.log("RESULT", jsonData)
+        // const newNameValue = jsonData[3]
+        // newName = newNameValue
 
-  //   // Fetch the details of the first email in the sequence
-
-  //   const formDataString = `emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
-
-  //   try {
-  //     const response = await fetch("/account/api?/loadEmail", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/x-www-form-urlencoded",
-  //       },
-  //       body: formDataString,
-  //     })
-
-  //     if (response.ok) {
-  //       const result = await response.json()
-
-  //       const jsonData = JSON.parse(result.data)
-
-  //       const replyValue = jsonData[3]
-  //       previousEmailId = jsonData[4]
-  //       nextEmailId = jsonData[5]
-  //       currentEmailId = jsonData[6]
-
-  //       reply = replyValue
-  //       // Update the reply variable with the fetched data
-  //       // reply = reply;
-
-  //       console.log("CURRENT IDS", currentEmailId)
-  //       console.log("PREVIOUS IDS", previousEmailId)
-  //       console.log("NEXT IDS", nextEmailId)
-
-  //       console.log("FETCHED RESULT", jsonData)
-
-  //       // Hide the table and show the form
-  //     } else {
-  //       console.error("Failed to fetch email details")
-  //     }
-  //   } catch (error) {
-  //     console.error("Error contacting Anthropic API:", error)
-  //     // Handle error appropriately
-  //   } finally {
-  //     isLoading = false
-  //     showForm.set(false)
-  //   }
-  // }
+        closeDeleteModal()
+        fetchUpdatedEmailSequences()
+      } else {
+        console.error("Delete Sequence failed")
+        // Handle error appropriately
+      }
+    } catch (error) {
+      console.error("Error deleting sequence:", error.message)
+      // Handle error
+    } finally {
+      isSaving = false
+      deletingSequence = false
+    }
+  }
 
   function formatDate(dateString) {
     let date = new Date(dateString)
@@ -197,17 +221,28 @@
     return new Intl.DateTimeFormat("en-US", options).format(date)
   }
 
+  // function copyToClipboard() {
+  //   const textarea = document.getElementById(
+  //     "replyTextArea",
+  //   ) as HTMLTextAreaElement
+  //   textarea.select()
+  //   document.execCommand("copy")
+  //   isCopySuccessful = true
+  //   // Reset the button text after a short delay
+  //   setTimeout(() => {
+  //     isCopySuccessful = false
+  //   }, 2000)
+  // }
+
   function copyToClipboard() {
-    const textarea = document.getElementById(
-      "replyTextArea",
-    ) as HTMLTextAreaElement
-    textarea.select()
-    document.execCommand("copy")
-    isCopySuccessful = true
-    // Reset the button text after a short delay
-    setTimeout(() => {
-      isCopySuccessful = false
-    }, 2000)
+    const div = document.getElementById("replyTextArea") as HTMLDivElement
+    navigator.clipboard.writeText(div.innerText).then(() => {
+      isCopySuccessful = true
+      // Reset the button text after a short delay
+      setTimeout(() => {
+        isCopySuccessful = false
+      }, 2000)
+    })
   }
 
   async function handleSubmit() {
@@ -220,56 +255,14 @@
     previousEmailId = null
     nextEmailId = null
 
-    basePrompt = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
-
-Here's The Problem With Sales Letters
-
-I'm an entrepreneur.
-
-And the clients I work with are entrepreneurs.
-
-The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
-
-They want to sell.
-
-And they wanna sell FAST.
-
-They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
-
-I don't know about you…
-
-But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
-
-ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
-
-Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
-
-Hey… some people love that process.
-
-But that's not me.
-
-I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
-
-So, I made it my mission to learn how to write sales letters fast.
-
-I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!
-
-I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
-
-    prompt = `{ "role": "user", "content": "${basePrompt
-      .replace(/\n/g, "\\n")
-      .replace(/&/g, "\\&")
-      .replace(/"/g, '\\"')
-      .replace(
-        /\u00A0/g,
-        " ",
-      )} ${formData.emailToRewrite.replace(/\n/g, "\\n")}" }`
-
     await handleGenerate()
   }
 
   async function handleGenerate() {
     isLoading = true
+    /*add 1 to updatedRecordCount to track the number of records fetched so far*/
+    updatedRecordCount++
+
     showForm.set(false)
     console.log("CURRENT INDEX", currentEmailIndex)
     // Convert form data to form-encoded string
@@ -279,7 +272,28 @@ I want you to rewrite the following email as a long-form email copy in your uniq
     console.log("EMAIL ID", currentEmailId)
     console.log("EMAIL SEQ", currentEmailSequenceId)
 
-    const formDataString = `prompt=[${prompt}]&emailId=${currentEmailId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}&steps=${formData.numEmails}&wordCount=${formData.wordCount}`
+    // const formDataString = `fullPrompt=[${prompt}]&emailId=${currentEmailId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}&steps=${formData.numEmails}&wordCount=${formData.wordCount}`
+    const formDataString = new URLSearchParams({
+      emailId: currentEmailId,
+      emailSequenceId: currentEmailSequenceId,
+      currentEmailIndex: currentEmailIndex.toString(),
+      steps: formData.numEmails.toString(),
+      wordCount: formData.wordCount,
+      businessDescription: formData.businessDescription,
+      targetAudience: formData.targetAudience,
+      objective: formData.objective,
+      creativity: formData.creativity,
+      problemFocus: formData.problemFocus,
+      solution: formData.solution,
+      emailToRewrite: formData.emailToRewrite,
+      reply: reply,
+      copyType: selectedCopyType,
+      previousEmailId: previousEmailId,
+      isRegenerate: isRegenerate.toString(),
+      // prompt: prompt,
+    }).toString()
+
+    console.log("FORM DATA STRING", formDataString)
 
     try {
       const response = await fetch("/account/api?/generateAnthropicReply", {
@@ -296,17 +310,24 @@ I want you to rewrite the following email as a long-form email copy in your uniq
         const jsonData = JSON.parse(result.data)
 
         const replyValue = jsonData[3]
-        currentEmailSequenceId = jsonData[5]
-        currentEmailId = jsonData[4]
+        if (!currentEmailSequenceId) {
+          currentEmailSequenceName = jsonData[4]
+        }
+        currentEmailSequenceId =
+          jsonData.length === 7 ? jsonData[6] : jsonData[5]
+        currentEmailId = jsonData[5]
 
         reply = replyValue
         // Update the reply variable with the fetched data
         // reply = reply;
         console.log("CURRENT PROMPT", prompt)
+        console.log("SEQ NAME", currentEmailSequenceName)
 
         console.log("EXTRATCTED", reply)
 
         console.log("RESULT", jsonData)
+        console.log("SEQ ID", currentEmailSequenceId)
+        console.log("EMAIL ID", currentEmailId)
       } else {
         console.error("Anthropic API request failed")
         // Handle error appropriately
@@ -316,11 +337,15 @@ I want you to rewrite the following email as a long-form email copy in your uniq
       // Handle error appropriately
     } finally {
       isLoading = false
+      isRegenerate = 0
+      // Trigger the typing effect when the component mounts or reply updates
+      typeText(reply)
     }
   }
 
   async function handleLoad() {
     isLoading = true
+
     console.log("CURRENT INDEX", currentEmailIndex)
     console.log("STEPSSSSSSSSSS", formData.numEmails)
     // Convert form data to form-encoded string
@@ -329,7 +354,7 @@ I want you to rewrite the following email as a long-form email copy in your uniq
     //   .join('&')
     console.log("EMAIL ID", currentEmailId)
     console.log("EMAIL SEQ", currentEmailSequenceId)
-
+    console.log("LOADED COPY TYPE", selectedCopyType)
     const formDataString = `emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
 
     try {
@@ -350,7 +375,7 @@ I want you to rewrite the following email as a long-form email copy in your uniq
         previousEmailId = jsonData[4]
         nextEmailId = jsonData[5]
         currentEmailId = jsonData[6]
-        prompt = jsonData[7]
+        // prompt = jsonData[7]
 
         reply = replyValue
         // Update the reply variable with the fetched data
@@ -359,7 +384,7 @@ I want you to rewrite the following email as a long-form email copy in your uniq
         console.log("CURRENT IDS", currentEmailId)
         console.log("PREVIOUS IDS", previousEmailId)
         console.log("NEXT IDS", nextEmailId)
-        console.log("CURRENT PROMPT", prompt)
+        // console.log("CURRENT PROMPT", prompt)
 
         console.log("FETCHED RESULT", jsonData)
       } else {
@@ -374,24 +399,40 @@ I want you to rewrite the following email as a long-form email copy in your uniq
     }
   }
 
-  let isLoadingSequences = false // Add this line
-
-  async function fetchEmailSequences() {
+  async function fetchEmailSequences(page = 1) {
+    // if (!hasMoreRecords) return // Exit if no more records or already loading
     isLoadingSequences = true
+
+    const formDataString = `page=${page}&limit=${itemsPerPage}`
 
     const response = await fetch("/account/api?/getEmailSequences", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
+      body: formDataString,
     })
     if (response.ok) {
       const result = await response.json()
       const jsonData = JSON.parse(result.data)
       const jsonDataC = JSON.parse(jsonData[1])
-      const sortedSequences = jsonDataC.sort((a, b) => b.id - a.id)
+      const sortedSequences = jsonDataC.sort(
+        (a, b) => b.updated_at - a.updated_at,
+      )
 
-      emailSequences.set(sortedSequences)
+      if (jsonDataC.length < itemsPerPage) {
+        hasMoreRecords = false // No more records to load
+      }
+
+      if (page === 1 || isSaving) {
+        // Replace the list on the first page load
+        emailSequences.set(jsonDataC)
+      } else {
+        // Append new results for subsequent pages
+        emailSequences.update((existing) => [...existing, ...jsonDataC])
+      }
+      updatedRecordCount = $emailSequences.length
+      console.log("UPDATED RECORD COUNT", updatedRecordCount)
 
       // emailSequences.set(jsonDataC)
       isLoadingSequences = false
@@ -401,33 +442,72 @@ I want you to rewrite the following email as a long-form email copy in your uniq
     }
   }
 
-  onMount(fetchEmailSequences)
+  async function fetchUpdatedEmailSequences() {
+    // if (!hasMoreRecords) return // Exit if no more records or already loading
+    isLoadingSequences = true
 
-  // onMount(async () => {
-  //   const response = await fetch("/account/api?/getEmailSequences", {
-  //     method: "POST",
-  //     headers: {
-  //       "Content-Type": "application/x-www-form-urlencoded",
-  //     },
-  //   })
-  //   if (response.ok) {
-  //     // console.log("RESPONSE", response)
+    const formDataString = `page=1&limit=${updatedRecordCount}`
 
-  //     const result = await response.json()
+    const response = await fetch("/account/api?/getEmailSequences", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+    if (response.ok) {
+      const result = await response.json()
+      const jsonData = JSON.parse(result.data)
+      const jsonDataC = JSON.parse(jsonData[1])
+      const sortedSequences = jsonDataC.sort(
+        (a, b) => b.updated_at - a.updated_at,
+      )
 
-  //     const jsonData = JSON.parse(result.data)
+      emailSequences.set(jsonDataC)
 
-  //     console.log("FETCHED SEQUENCES JSON DATA", jsonData[1])
-  //     const jsonDataC = JSON.parse(jsonData[1])
+      // emailSequences.set(jsonDataC)
+      isLoadingSequences = false
+      console.log("EMAIL SEQUENCESSSSS", $emailSequences)
+    } else {
+      console.error("Failed to fetch email sequences")
+    }
+  }
 
-  //     emailSequences.set(jsonDataC)
+  async function loadMore() {
+    if (isLoadingNewSequences) return // Prevent multiple clicks
+    console.log("LOADING NEW SEQUENCES", isLoadingNewSequences)
+    isLoadingNewSequences = true
 
-  //     isLoadingSequences = false
-  //     console.log("EMAIL SEQUENCESSSSS", $emailSequences)
-  //   } else {
-  //     console.error("Failed to fetch email sequences")
-  //   }
-  // })
+    try {
+      console.log("LOADING NEW SEQUENCES", isLoadingNewSequences)
+      currentPage += 1
+      await fetchEmailSequences(currentPage) // Wait for the fetch operation to complete
+    } catch (error) {
+      console.error("Error loading sequences:", error)
+    } finally {
+      isLoadingNewSequences = false // Reset after loading completes
+    }
+  }
+
+  async function fetchCopyTypes() {
+    const response = await fetch("/account/api?/fetchCopyTypes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    })
+    if (response.ok) {
+      const result = await response.json()
+      const jsonCopyTypeData = JSON.parse(result.data)
+      const jsonCopyTypeDataC = JSON.parse(jsonCopyTypeData[1])
+
+      console.log("JSON C", jsonCopyTypeDataC)
+      copyTypes.set(jsonCopyTypeDataC)
+      console.log("COPY TYPES", $copyTypes)
+    } else {
+      console.error("Failed to fetch copy types")
+    }
+  }
 
   async function toggleShowForm() {
     showForm.set(true)
@@ -435,16 +515,146 @@ I want you to rewrite the following email as a long-form email copy in your uniq
   async function toggleHideForm() {
     showForm.set(false)
   }
+
+  function openCopyTypeModal() {
+    isCopyTypeModalOpen = true
+  }
+
+  function handleCopyTypeSelection(type: string) {
+    selectedCopyType = type.name
+    isCopyTypeModalOpen = false
+    showForm.set(true) // Show the form after selection
+    console.log("SELECTED COPY TYPE", selectedCopyType)
+  }
+
+  function closeCopyTypeModal() {
+    isCopyTypeModalOpen = false
+  }
+
+  // Toggle selection mode
+  function toggleSelection(sequenceId) {
+    selectedSequences.update((selected) => {
+      if (selected.has(sequenceId)) {
+        selected.delete(sequenceId)
+      } else {
+        selected.add(sequenceId)
+      }
+      return selected
+    })
+  }
+
+  // Delete selected sequences
+  async function deleteSelected() {
+    isSaving = true
+    const selected = Array.from($selectedSequences)
+    const formDataString = `deleteIds=${selected}`
+    console.log("DELETE SELECTED SEQUENCES ??????", formDataString)
+    // Delete the sequence name in the Supabase database
+    try {
+      const response = await fetch("/account/api?/deleteSelectedSequences", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formDataString,
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        const jsonData = JSON.parse(result.data)
+        console.log("RESULT", jsonData)
+        // const newNameValue = jsonData[3]
+        // newName = newNameValue
+
+        // Update local state
+        // emailSequences.update((sequences) =>
+        //   sequences.filter((sequence) => !selected.includes(sequence.id)),
+        // )
+
+        fetchUpdatedEmailSequences()
+
+        selectedSequences.set(new Set())
+        isSelectionMode.set(false)
+      } else {
+        console.error("Delete Selected Sequence failed")
+        // Handle error appropriately
+      }
+    } catch (error) {
+      console.error("Error deleting selected sequence:", error.message)
+      // Handle error
+    } finally {
+      selectedSequences.set(new Set())
+      isSelectionMode.set(false)
+      deletingSelectedSequences = false
+      isSaving = false
+      deletingSequence = false
+    }
+  }
+
+  // Select all sequences
+  function selectAll() {
+    emailSequences.update((sequences) => {
+      selectedSequences.set(new Set(sequences.map((seq) => seq.id)))
+      return sequences
+    })
+  }
+
+  // Cancel selection
+  function cancelSelection() {
+    selectedSequences.set(new Set())
+    isSelectionMode.set(false)
+  }
+
+  // Function to simulate typing effect
+  function typeText(text) {
+    displayedText = "" // Reset the displayed text
+    let index = 0
+
+    isTyping = true
+
+    function typeNextChar() {
+      if (index < text.length) {
+        displayedText += text[index]
+        index++
+        setTimeout(typeNextChar, typingSpeed)
+      } else {
+        isTyping = false
+      }
+    }
+
+    typeNextChar()
+  }
+  // // Trigger the typing effect when the component mounts or reply updates
+  // $: if (reply) typeText(reply)
+
+  // onMount(fetchEmailSequences)
+
+  onMount(() => {
+    fetchEmailSequences(currentPage)
+    fetchCopyTypes()
+  })
 </script>
 
-<main>
+<div>
+  {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
+    <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
+    <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button>
+  {/if}
+</div>
+
+<main
+  class="main-content {isCopyTypeModalOpen || isDeleteModalOpen
+    ? 'blurred'
+    : ''}"
+>
   {#if isLoading || isLoadingSequences}
     <div class="spinner-container">
       <span class="loading loading-dots loading-lg text-primary"></span>
     </div>
   {/if}
 
-  {#if !reply && !isLoading && $showForm}
+  <!-- {#if !reply && !isLoading && $showForm} -->
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Rewriter"}
     <form on:submit|preventDefault={handleSubmit} class="form-container">
       <div class="form-section">
         <label
@@ -593,15 +803,42 @@ I want you to rewrite the following email as a long-form email copy in your uniq
       </div>
     </form>
   {/if}
+
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Long Form Email"}
+    <p>Displaying Long Form Email form...</p>
+    <!-- Long Form Email specific fields here -->
+  {/if}
+
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Offer Based Cold Email Sequence"}
+    <p>Displaying Offer Based Cold Email Sequence form...</p>
+    <!-- Offer Based Cold Email Sequence specific fields here -->
+  {/if}
+
+  {#if !reply && !isLoading && $showForm && selectedCopyType === "Value Based Cold Email Sequence"}
+    <p>Displaying Value Based Cold Email Sequence form...</p>
+    <!-- Value Based Cold Email Sequence specific fields here -->
+  {/if}
+
   {#if reply && !isLoading && !$showForm}
     <div>
       <div class="textarea-container">
-        <textarea
+        <!-- <textarea
           id="replyTextArea"
           bind:value={reply}
           readonly
           class="w-full p-2 border rounded focus:outline-none focus:shadow-outline h-80vh resize-none"
-        ></textarea>
+        ></textarea> -->
+        <div
+          id="replyTextArea"
+          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline h-80vh overflow-auto"
+          style="white-space: pre-wrap"
+        >
+          {#if !isTyping}
+            {reply}
+          {:else}
+            {displayedText}
+          {/if}
+        </div>
 
         <button
           on:click={copyToClipboard}
@@ -645,7 +882,7 @@ I want you to rewrite the following email as a long-form email copy in your uniq
 
       <div class="button-container">
         <div class="all-caps">
-          {currentEmailSequenceName} / SEQUENCE ID # {currentEmailSequenceId}
+          {currentEmailSequenceName} <br /> SEQUENCE ID # {currentEmailSequenceId}
           / STEP # {currentEmailIndex}
         </div>
         <button
@@ -656,9 +893,11 @@ I want you to rewrite the following email as a long-form email copy in your uniq
             reply = null
             previousEmailId = null
             nextEmailId = null
-            fetchEmailSequences()
+            // fetchEmailSequences()
+            fetchUpdatedEmailSequences()
           }}
           class="btn btn-primary"
+          disabled={isTyping}
           >{#if currentEmailIndex < formData.numEmails}Start Over
           {:else}Finish{/if}
         </button>
@@ -670,15 +909,24 @@ I want you to rewrite the following email as a long-form email copy in your uniq
               currentEmailIndex -= 1
               handleLoad()
             }}
-            class="btn btn-outline">Previous</button
+            class="btn btn-outline"
+            disabled={isTyping}
           >
+            Previous
+          </button>
         {/if}
-        <button
-          on:click={() => {
-            handleGenerate()
-          }}
-          class="btn btn-outline">Regenerate</button
-        >
+        {#if !nextEmailId}
+          <button
+            on:click={() => {
+              isRegenerate = 1
+              handleGenerate()
+            }}
+            class="btn btn-outline"
+            disabled={isTyping}
+          >
+            Regenerate
+          </button>
+        {/if}
         {#if currentEmailIndex < formData.numEmails && !nextEmailId}
           <button
             on:click={() => {
@@ -687,20 +935,20 @@ I want you to rewrite the following email as a long-form email copy in your uniq
               currentEmailId = ""
 
               // currentEmailSequenceId = ""
-              nextPrompt = `Write email # ${currentEmailIndex} of ${formData.wordCount}`
-              prompt = `${prompt},{"role": "assistant", "content": "${reply
-                .replace(/\n/g, "\\n")
-                .replace(/&/g, "\\&")
-                .replace(/"/g, '\\"')
-                .replace(
-                  /\u00A0/g,
-                  " ",
-                )}"},{"role": "user", "content": "${nextPrompt}"}`
+              // nextPrompt = `Write email # ${currentEmailIndex} of ${formData.wordCount}`
+              // prompt = `{"role": "assistant", "content": "${reply
+              //   .replace(/\n/g, "\\n")
+              //   .replace(/&/g, "\\&")
+              //   .replace(/"/g, '\\"')
+              //   .replace(/\u00A0/g, " ")}"}`
               console.log("PREVIOUS EMAIL ID", previousEmailId)
               handleGenerate()
             }}
-            class="btn btn-success">Generate Next</button
+            class="btn btn-success"
+            disabled={isTyping}
           >
+            Generate Next
+          </button>
         {/if}
         {#if currentEmailIndex < formData.numEmails && nextEmailId}
           <button
@@ -711,63 +959,170 @@ I want you to rewrite the following email as a long-form email copy in your uniq
 
               handleLoad()
             }}
-            class="btn btn-outline">Next</button
+            class="btn btn-outline"
+            disabled={isTyping}
           >
+            Next
+          </button>
         {/if}
       </div>
     </div>
   {/if}
 
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
-    <button class="plus-sign" on:click={toggleShowForm}>+</button>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>NAME</th>
-          <th>STEPS</th>
-          <th>MODIFIED</th>
-          <!-- Add other table headers as needed -->
-        </tr>
-      </thead>
-      <tbody>
-        {#each $emailSequences as emailSequence (emailSequence.id)}
-          <tr>
-            <td>{emailSequence.id}</td>
-            <td>{emailSequence.name}</td>
-            <td>{emailSequence.steps}</td>
-            <td>{formatDate(emailSequence.updated_at)}</td>
-            <td>
-              <button
-                class="btn btn-outline"
-                on:click={() => {
-                  currentEmailIndex = 1
-                  currentEmailSequenceId = emailSequence.id
-                  currentEmailSequenceName = emailSequence.name
-                  formData.numEmails = emailSequence.steps
-                  formData.wordCount = emailSequence.word_count
+    {#if $isSelectionMode}
+      <div class="bulk-actions">
+        <button class="btn btn-outline" on:click={selectAll}>Select All</button>
+        <button class="btn btn-outline" on:click={cancelSelection}
+          >Cancel</button
+        >
+        <button
+          class="btn btn-outline"
+          on:click={() => {
+            deletingSelectedSequences = true
+            openSelectedDeleteModal()
+          }}>Delete Selected</button
+        >
+      </div>
+    {/if}
 
-                  handleLoad()
-                }}
-              >
-                Open
-              </button></td
+    <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
+    <!-- <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button> -->
+    <div class="main-list">
+      {#each $emailSequences as emailSequence (emailSequence.id)}
+        <div
+          class="email-box {$isSelectionMode
+            ? 'hover-mode selection-mode'
+            : ''}"
+          on:mouseenter={() => event.currentTarget.classList.add("hover-mode")}
+          on:mouseleave={() =>
+            event.currentTarget.classList.remove("hover-mode")}
+        >
+          <input
+            type="checkbox"
+            class="select-checkbox"
+            checked={$selectedSequences.has(emailSequence.id)}
+            on:click={() => isSelectionMode.set(true)}
+            on:change={() => {
+              toggleSelection(emailSequence.id)
+              if (!$selectedSequences.size) {
+                cancelSelection()
+              }
+            }}
+          />
+          <span
+            class="sequence-name"
+            on:click={() => {
+              currentEmailIndex = 1
+              currentEmailSequenceId = emailSequence.id
+              currentEmailSequenceName = emailSequence.name
+              formData.numEmails = emailSequence.steps
+              formData.wordCount = emailSequence.word_count
+              selectedCopyType = emailSequence.copy_type
+              handleLoad()
+            }}>{emailSequence.name}</span
+          >
+          <div class="actions">
+            <!-- <button
+              class="btn btn-outline"
+              on:click={() => {
+                currentEmailIndex = 1
+                currentEmailSequenceId = emailSequence.id
+                currentEmailSequenceName = emailSequence.name
+                formData.numEmails = emailSequence.steps
+                formData.wordCount = emailSequence.word_count
+                selectedCopyType = emailSequence.copy_type
+                handleLoad()
+              }}
             >
+              Open
+            </button> -->
+            <button
+              class="btn btn-outline"
+              on:click={() => openRenameModal(emailSequence)}>Rename</button
+            >
+            <button
+              class="btn btn-outline"
+              on:click={() => {
+                deletingSequence = true
+                openDeleteModal(emailSequence)
+              }}>Delete</button
+            >
+          </div>
+        </div>
+      {/each}
 
-            <td>
-              <button
-                class="btn btn-outline"
-                on:click={() => openRenameModal(emailSequence)}
-              >
-                Rename
-              </button>
-            </td>
-
-            <!-- Add other table cells as needed -->
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>NAME</th>
+            <th>STEPS</th>
+            <th>MODIFIED</th>
+            <!-- Add other table headers as needed -->
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each $emailSequences as emailSequence (emailSequence.id)}
+            <tr>
+              <td>{emailSequence.id}</td>
+              <td>{emailSequence.name}</td>
+              <td>{emailSequence.steps}</td>
+              <td>{formatDate(emailSequence.updated_at)}</td>
+              <td>
+                <button
+                  class="btn btn-outline"
+                  on:click={() => {
+                    currentEmailIndex = 1
+                    currentEmailSequenceId = emailSequence.id
+                    currentEmailSequenceName = emailSequence.name
+                    formData.numEmails = emailSequence.steps
+                    formData.wordCount = emailSequence.word_count
+                    selectedCopyType = emailSequence.copy_type
+                    handleLoad()
+                  }}
+                >
+                  Open
+                </button></td
+              >
+
+              <td>
+                <button
+                  class="btn btn-outline"
+                  on:click={() => openRenameModal(emailSequence)}
+                >
+                  Rename
+                </button>
+              </td>
+              <td>
+                <button
+                  class="btn btn-outline"
+                  on:click={() => {
+                    deletingSequence = true
+                    openDeleteModal(emailSequence)
+                  }}
+                >
+                  Delete
+                </button>
+              </td>
+
+              <!-- Add other table cells as needed -->
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <button
+        class="btn btn-primary"
+        on:click={loadMore}
+        disabled={!hasMoreRecords || isLoadingNewSequences}
+      >
+        {#if !hasMoreRecords}
+          No More Records
+        {:else}
+          {isLoadingNewSequences ? "Loading..." : "Show More"}
+        {/if}
+      </button>
+    </div>
   {/if}
 </main>
 
@@ -784,6 +1139,65 @@ I want you to rewrite the following email as a long-form email copy in your uniq
   </div>
 {/if}
 
+{#if isDeleteModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeDeleteModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <h3>Confirm Delete?</h3>
+
+      <ul>
+        <li>
+          <button
+            class="red"
+            on:click={() => {
+              if (deletingSequence) {
+                deleteEmailSequence()
+              } else if (deletingSelectedSequences) {
+                deleteSelected()
+              }
+            }}
+            disabled={isSaving}
+          >
+            {#if isSaving}Deleting...{:else}Delete{/if}
+          </button>
+        </li>
+        <li>
+          <button on:click={closeDeleteModal} disabled={isSaving}>
+            Cancel
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+{/if}
+
+{#if isCopyTypeModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeCopyTypeModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <h3>Select Copy Type</h3>
+      <ul>
+        {#each $copyTypes as type (type.id)}
+          <li>
+            <button on:click={() => handleCopyTypeSelection(type)}>
+              {type.name}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <button class="red" on:click={closeCopyTypeModal}>Cancel</button>
+    </div>
+  </div>
+{/if}
+
 <style>
   main {
     background: rgba(255, 255, 255, 0); /* Transparent white background */
@@ -795,12 +1209,12 @@ I want you to rewrite the following email as a long-form email copy in your uniq
     position: absolute;
     top: 10px;
     right: 60px;
-    font-size: 24px;
+    font-size: 18px;
     background: #4caf50;
     color: white;
     border: none;
     padding: 10px 20px;
-    border-radius: 50%;
+    border-radius: 20px;
     cursor: pointer;
     z-index: 1000;
   }
@@ -899,5 +1313,182 @@ I want you to rewrite the following email as a long-form email copy in your uniq
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     z-index: 1000;
+  }
+  /* .copy-type-modal {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  animation: scaleUp 0.3s ease;
+}
+  .copy-type-modal ul {
+    list-style: none;
+    padding: 0;
+  }
+  .copy-type-modal li {
+    margin: 10px 0;
+  } */
+
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+  }
+  .copy-type-modal {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    animation: scaleUp 0.3s ease;
+  }
+  .main-content {
+    will-change: filter;
+    width: 100%;
+  }
+  .main-content.blurred {
+    filter: blur(5px);
+    transition: filter 0.3s ease;
+  }
+  /* Animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleUp {
+    from {
+      transform: scale(0.9);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Modal content */
+  .copy-type-modal h3 {
+    margin: 0 0 15px;
+    font-size: 1.5rem;
+    color: #333;
+  }
+
+  .copy-type-modal ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .copy-type-modal li {
+    margin: 10px 0;
+  }
+
+  .copy-type-modal button {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    background: #4caf50;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .copy-type-modal button:hover {
+    background: #45a049;
+  }
+
+  /* Cancel button styling */
+  .copy-type-modal button.red {
+    background: #d9534f; /* Red for cancel */
+  }
+
+  .copy-type-modal button.red:hover {
+    background: #c9302c;
+  }
+
+  .email-box {
+    display: flex;
+    /* justify-content: space-between; */
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin-bottom: 10px;
+    position: relative;
+    max-width: 900px;
+  }
+
+  .email-box:hover .actions {
+    display: flex;
+  }
+
+  .actions {
+    display: none;
+    position: absolute;
+    right: -20px;
+    top: 0px;
+    scale: 0.5;
+  }
+
+  .sequence-name {
+    cursor: pointer;
+  }
+
+  @media (max-width: 768px) {
+    .actions {
+      display: flex;
+      /* position: relative; */
+      margin-left: auto;
+      margin-right: -70px;
+    }
+    .sequence-name {
+      cursor: pointer;
+      max-width: 70%;
+    }
+  }
+
+  .bulk-actions {
+    scale: 0.7;
+    margin-left: -3rem;
+    position: fixed;
+  }
+
+  .select-checkbox {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .select-checkbox {
+      display: inline-block;
+      margin-right: 20px;
+      margin-top: 2px;
+    }
+  }
+
+  .hover-mode .select-checkbox {
+    display: inline-block;
+    margin-right: 20px;
+    margin-top: 2px;
+  }
+
+  .selection-mode .select-checkbox {
+    display: inline-block;
+    margin-right: 20px;
+    margin-top: 2px;
+  }
+  .main-list {
+    padding-top: 50px;
+    width: 100%;
   }
 </style>
