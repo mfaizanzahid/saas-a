@@ -262,7 +262,7 @@ export const actions = {
   generateAnthropicReply: async ({ request, locals: {  supabase, getSession } }) => {
 console.log("WE ARE IN THE BACKEND GENERATE")
 
-let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply="",promptAdd="",fetchPromptEmailIndex
+let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply="",promptAdd="",fetchPromptEmailIndex,currentEmailSequenceName=''
 
 
     const formData = await request.formData()
@@ -353,41 +353,66 @@ console.log("DATABASE RESULT",currentEmailData)
       };
     }
 
-    modelInstructions = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
+     // Fetch copy type prompts
+     const { data: copyTypePromptsData, error: copyTypeError } = await supabase
+     .from('copy_types')
+     .select('system_prompt, first_prompt, next_prompt')
+     .eq('name', copyType)
+     .single();
 
-Here's The Problem With Sales Letters
+     if (copyTypeError) {
+       console.error('Error fetching copy type prompts:', copyTypeError)
+       throw new Error('Error fetching copy type prompts')
+     }
 
-I'm an entrepreneur.
+     modelInstructions = copyTypePromptsData.system_prompt
+     firstPrompt = copyTypePromptsData.first_prompt.replace("${wordCount}", wordCount)
+     nextPrompt = copyTypePromptsData.next_prompt.replace("${currentEmailIndex}", currentEmailIndex).replace("${wordCount}", wordCount).replace("${steps}", steps)
 
-And the clients I work with are entrepreneurs.
+  
 
-The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
 
-They want to sell.
 
-And they wanna sell FAST.
+   console.log("MODEL INSTRUCTIONS",modelInstructions)
+   console.log("FIRST PROMPT",firstPrompt)
+   console.log("NEXT PROMPT",nextPrompt)
 
-They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
 
-I don't know about you…
+//     modelInstructions = `You are a senior copywriter for fitness coaches specializing in long-form emails. Below is an example of the type of copy you write. Let me know if you understand.
 
-But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
+// Here's The Problem With Sales Letters
 
-ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
+// I'm an entrepreneur.
 
-Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
+// And the clients I work with are entrepreneurs.
 
-Hey… some people love that process.
+// The people I work with don't have time to write these long-ass sales letters that just go on and on and on.
 
-But that's not me.
+// They want to sell.
 
-I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
+// And they wanna sell FAST.
 
-So, I made it my mission to learn how to write sales letters fast.
+// They want to bang out some copy, put it up on a page, send some traffic and actually make sales.
 
-I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!`
+// I don't know about you…
 
-firstPrompt = `I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
+// But I just don't have the time or patience to rewrite a letter 17 times until it's perfect… or spend a few months painstakingly writing and rewriting and writing and rewriting until my fingers bleed.
+
+// ALL of the sales letters trainings out there that I took when I was learning how to write copy, focused on these super in-depth, complex sales letter creation formulas that took a full month of research…
+
+// Another month of writing… and then a whole ‘nother month of testing, tweaking, editing and optimizing.
+
+// Hey… some people love that process.
+
+// But that's not me.
+
+// I heard from someone a long time ago (I think it was Dan Kennedy) that money is attracted to speed.
+
+// So, I made it my mission to learn how to write sales letters fast.
+
+// I figured… the faster I can write these things, the easier my life would be. And as long as my clients made a ton of sales, they'd be happier than a pig in shit!`
+
+// firstPrompt = `I want you to rewrite the following email as a long-form email copy in your unique copywriting style with maximum word count of 400 words:`
 
 
 
@@ -409,7 +434,7 @@ console.log("CHECK NEW PROMPT",prompt)
 } else if (currentEmailIndex>1) {
   console.log("WE ARE HERE CREATING THE NEXT PROMPT")
 
-  nextPrompt = `Write email # ${currentEmailIndex} of ${wordCount}`
+  // nextPrompt = `Write email # ${currentEmailIndex} of ${wordCount}`
 
   promptA = `[${prompt},{"role": "assistant", "content": "${reply
     .replace(/\n/g, "\\n")
@@ -471,7 +496,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       
    return {
     status: 200,
-    body: { reply: reply, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId},
+    body: { reply: reply, name:currentEmailSequenceName, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId},
   }
 
 
@@ -493,12 +518,14 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         // Create a new email sequence
         
         if (!newEmailSequenceId) {
+          currentEmailSequenceName = reply.match(/^[^,.;\(\n]+/)[0]
+          // currentEmailSequenceName = reply.slice(0, 50)
         const { data: newEmailSequence, error: sequenceError } = await supabase
           .from('copy_collection')
           .upsert([
             {
               user_id: userId,
-              name: 'New Untitled Sequence',
+              name:currentEmailSequenceName,
               steps:steps,
               word_count: wordCount,
               copy_type:copyType,

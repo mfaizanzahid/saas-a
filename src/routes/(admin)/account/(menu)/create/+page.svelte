@@ -94,7 +94,7 @@
   let isRegenerate = 0
 
   let currentPage = 1 // Tracks the current page
-  const itemsPerPage = 3 // Number of results per page
+  const itemsPerPage = 10 // Number of results per page
 
   // Store for email sequences and selection state
   let isSelectionMode = writable(false)
@@ -310,14 +310,18 @@
         const jsonData = JSON.parse(result.data)
 
         const replyValue = jsonData[3]
+        if (!currentEmailSequenceId) {
+          currentEmailSequenceName = jsonData[4]
+        }
         currentEmailSequenceId =
-          jsonData.length === 6 ? jsonData[5] : jsonData[4]
-        currentEmailId = jsonData[4]
+          jsonData.length === 7 ? jsonData[6] : jsonData[5]
+        currentEmailId = jsonData[5]
 
         reply = replyValue
         // Update the reply variable with the fetched data
         // reply = reply;
         console.log("CURRENT PROMPT", prompt)
+        console.log("SEQ NAME", currentEmailSequenceName)
 
         console.log("EXTRATCTED", reply)
 
@@ -334,6 +338,8 @@
     } finally {
       isLoading = false
       isRegenerate = 0
+      // Trigger the typing effect when the component mounts or reply updates
+      typeText(reply)
     }
   }
 
@@ -618,8 +624,8 @@
 
     typeNextChar()
   }
-  // Trigger the typing effect when the component mounts or reply updates
-  $: if (reply) typeText(reply)
+  // // Trigger the typing effect when the component mounts or reply updates
+  // $: if (reply) typeText(reply)
 
   // onMount(fetchEmailSequences)
 
@@ -827,7 +833,11 @@
           class="w-full p-2 border rounded focus:outline-none focus:shadow-outline h-80vh overflow-auto"
           style="white-space: pre-wrap"
         >
-          {displayedText}
+          {#if !isTyping}
+            {reply}
+          {:else}
+            {displayedText}
+          {/if}
         </div>
 
         <button
@@ -872,7 +882,7 @@
 
       <div class="button-container">
         <div class="all-caps">
-          {currentEmailSequenceName} / SEQUENCE ID # {currentEmailSequenceId}
+          {currentEmailSequenceName} <br /> SEQUENCE ID # {currentEmailSequenceId}
           / STEP # {currentEmailIndex}
         </div>
         <button
@@ -887,6 +897,7 @@
             fetchUpdatedEmailSequences()
           }}
           class="btn btn-primary"
+          disabled={isTyping}
           >{#if currentEmailIndex < formData.numEmails}Start Over
           {:else}Finish{/if}
         </button>
