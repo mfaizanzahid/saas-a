@@ -89,9 +89,20 @@
   let isLoadingSequences = true
   let hasMoreRecords = true // Tracks if there are more records to load
   let updatedRecordCount = 0
+  let deletingSequence = false
+  let deletingSelectedSequences = false
+  let isRegenerate = 0
 
   let currentPage = 1 // Tracks the current page
   const itemsPerPage = 3 // Number of results per page
+
+  // Store for email sequences and selection state
+  let isSelectionMode = writable(false)
+  let selectedSequences = writable(new Set())
+
+  let isTyping = false
+  let displayedText = "" // The text progressively shown with the typing effect
+  let typingSpeed = 2 // Adjust the typing speed (milliseconds per character)
 
   function openRenameModal(sequence) {
     currentSequence = sequence
@@ -111,6 +122,10 @@
     isDeleteModalOpen = true
 
     console.log("OPEN MODAL", currentSequence, newName, isModalOpen)
+  }
+
+  function openSelectedDeleteModal() {
+    isDeleteModalOpen = true
   }
 
   function closeRenameModal() {
@@ -190,6 +205,7 @@
       // Handle error
     } finally {
       isSaving = false
+      deletingSequence = false
     }
   }
 
@@ -205,17 +221,28 @@
     return new Intl.DateTimeFormat("en-US", options).format(date)
   }
 
+  // function copyToClipboard() {
+  //   const textarea = document.getElementById(
+  //     "replyTextArea",
+  //   ) as HTMLTextAreaElement
+  //   textarea.select()
+  //   document.execCommand("copy")
+  //   isCopySuccessful = true
+  //   // Reset the button text after a short delay
+  //   setTimeout(() => {
+  //     isCopySuccessful = false
+  //   }, 2000)
+  // }
+
   function copyToClipboard() {
-    const textarea = document.getElementById(
-      "replyTextArea",
-    ) as HTMLTextAreaElement
-    textarea.select()
-    document.execCommand("copy")
-    isCopySuccessful = true
-    // Reset the button text after a short delay
-    setTimeout(() => {
-      isCopySuccessful = false
-    }, 2000)
+    const div = document.getElementById("replyTextArea") as HTMLDivElement
+    navigator.clipboard.writeText(div.innerText).then(() => {
+      isCopySuccessful = true
+      // Reset the button text after a short delay
+      setTimeout(() => {
+        isCopySuccessful = false
+      }, 2000)
+    })
   }
 
   async function handleSubmit() {
@@ -233,6 +260,9 @@
 
   async function handleGenerate() {
     isLoading = true
+    /*add 1 to updatedRecordCount to track the number of records fetched so far*/
+    updatedRecordCount++
+
     showForm.set(false)
     console.log("CURRENT INDEX", currentEmailIndex)
     // Convert form data to form-encoded string
@@ -259,6 +289,7 @@
       reply: reply,
       copyType: selectedCopyType,
       previousEmailId: previousEmailId,
+      isRegenerate: isRegenerate.toString(),
       // prompt: prompt,
     }).toString()
 
@@ -302,11 +333,13 @@
       // Handle error appropriately
     } finally {
       isLoading = false
+      isRegenerate = 0
     }
   }
 
   async function handleLoad() {
     isLoading = true
+
     console.log("CURRENT INDEX", currentEmailIndex)
     console.log("STEPSSSSSSSSSS", formData.numEmails)
     // Convert form data to form-encoded string
@@ -470,13 +503,6 @@
     }
   }
 
-  // onMount(fetchEmailSequences)
-
-  onMount(() => {
-    fetchEmailSequences(currentPage)
-    fetchCopyTypes()
-  })
-
   async function toggleShowForm() {
     showForm.set(true)
   }
@@ -498,6 +524,109 @@
   function closeCopyTypeModal() {
     isCopyTypeModalOpen = false
   }
+
+  // Toggle selection mode
+  function toggleSelection(sequenceId) {
+    selectedSequences.update((selected) => {
+      if (selected.has(sequenceId)) {
+        selected.delete(sequenceId)
+      } else {
+        selected.add(sequenceId)
+      }
+      return selected
+    })
+  }
+
+  // Delete selected sequences
+  async function deleteSelected() {
+    isSaving = true
+    const selected = Array.from($selectedSequences)
+    const formDataString = `deleteIds=${selected}`
+    console.log("DELETE SELECTED SEQUENCES ??????", formDataString)
+    // Delete the sequence name in the Supabase database
+    try {
+      const response = await fetch("/account/api?/deleteSelectedSequences", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formDataString,
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        const jsonData = JSON.parse(result.data)
+        console.log("RESULT", jsonData)
+        // const newNameValue = jsonData[3]
+        // newName = newNameValue
+
+        // Update local state
+        // emailSequences.update((sequences) =>
+        //   sequences.filter((sequence) => !selected.includes(sequence.id)),
+        // )
+
+        fetchUpdatedEmailSequences()
+
+        selectedSequences.set(new Set())
+        isSelectionMode.set(false)
+      } else {
+        console.error("Delete Selected Sequence failed")
+        // Handle error appropriately
+      }
+    } catch (error) {
+      console.error("Error deleting selected sequence:", error.message)
+      // Handle error
+    } finally {
+      selectedSequences.set(new Set())
+      isSelectionMode.set(false)
+      deletingSelectedSequences = false
+      isSaving = false
+      deletingSequence = false
+    }
+  }
+
+  // Select all sequences
+  function selectAll() {
+    emailSequences.update((sequences) => {
+      selectedSequences.set(new Set(sequences.map((seq) => seq.id)))
+      return sequences
+    })
+  }
+
+  // Cancel selection
+  function cancelSelection() {
+    selectedSequences.set(new Set())
+    isSelectionMode.set(false)
+  }
+
+  // Function to simulate typing effect
+  function typeText(text) {
+    displayedText = "" // Reset the displayed text
+    let index = 0
+
+    isTyping = true
+
+    function typeNextChar() {
+      if (index < text.length) {
+        displayedText += text[index]
+        index++
+        setTimeout(typeNextChar, typingSpeed)
+      } else {
+        isTyping = false
+      }
+    }
+
+    typeNextChar()
+  }
+  // Trigger the typing effect when the component mounts or reply updates
+  $: if (reply) typeText(reply)
+
+  // onMount(fetchEmailSequences)
+
+  onMount(() => {
+    fetchEmailSequences(currentPage)
+    fetchCopyTypes()
+  })
 </script>
 
 <div>
@@ -687,12 +816,19 @@
   {#if reply && !isLoading && !$showForm}
     <div>
       <div class="textarea-container">
-        <textarea
+        <!-- <textarea
           id="replyTextArea"
           bind:value={reply}
           readonly
           class="w-full p-2 border rounded focus:outline-none focus:shadow-outline h-80vh resize-none"
-        ></textarea>
+        ></textarea> -->
+        <div
+          id="replyTextArea"
+          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline h-80vh overflow-auto"
+          style="white-space: pre-wrap"
+        >
+          {displayedText}
+        </div>
 
         <button
           on:click={copyToClipboard}
@@ -748,6 +884,7 @@
             previousEmailId = null
             nextEmailId = null
             // fetchEmailSequences()
+            fetchUpdatedEmailSequences()
           }}
           class="btn btn-primary"
           >{#if currentEmailIndex < formData.numEmails}Start Over
@@ -761,15 +898,24 @@
               currentEmailIndex -= 1
               handleLoad()
             }}
-            class="btn btn-outline">Previous</button
+            class="btn btn-outline"
+            disabled={isTyping}
           >
+            Previous
+          </button>
         {/if}
-        <button
-          on:click={() => {
-            handleGenerate()
-          }}
-          class="btn btn-outline">Regenerate</button
-        >
+        {#if !nextEmailId}
+          <button
+            on:click={() => {
+              isRegenerate = 1
+              handleGenerate()
+            }}
+            class="btn btn-outline"
+            disabled={isTyping}
+          >
+            Regenerate
+          </button>
+        {/if}
         {#if currentEmailIndex < formData.numEmails && !nextEmailId}
           <button
             on:click={() => {
@@ -787,8 +933,11 @@
               console.log("PREVIOUS EMAIL ID", previousEmailId)
               handleGenerate()
             }}
-            class="btn btn-success">Generate Next</button
+            class="btn btn-success"
+            disabled={isTyping}
           >
+            Generate Next
+          </button>
         {/if}
         {#if currentEmailIndex < formData.numEmails && nextEmailId}
           <button
@@ -799,83 +948,170 @@
 
               handleLoad()
             }}
-            class="btn btn-outline">Next</button
+            class="btn btn-outline"
+            disabled={isTyping}
           >
+            Next
+          </button>
         {/if}
       </div>
     </div>
   {/if}
 
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
+    {#if $isSelectionMode}
+      <div class="bulk-actions">
+        <button class="btn btn-outline" on:click={selectAll}>Select All</button>
+        <button class="btn btn-outline" on:click={cancelSelection}
+          >Cancel</button
+        >
+        <button
+          class="btn btn-outline"
+          on:click={() => {
+            deletingSelectedSequences = true
+            openSelectedDeleteModal()
+          }}>Delete Selected</button
+        >
+      </div>
+    {/if}
+
     <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
     <!-- <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button> -->
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>NAME</th>
-          <th>STEPS</th>
-          <th>MODIFIED</th>
-          <!-- Add other table headers as needed -->
-        </tr>
-      </thead>
-      <tbody>
-        {#each $emailSequences as emailSequence (emailSequence.id)}
-          <tr>
-            <td>{emailSequence.id}</td>
-            <td>{emailSequence.name}</td>
-            <td>{emailSequence.steps}</td>
-            <td>{formatDate(emailSequence.updated_at)}</td>
-            <td>
-              <button
-                class="btn btn-outline"
-                on:click={() => {
-                  currentEmailIndex = 1
-                  currentEmailSequenceId = emailSequence.id
-                  currentEmailSequenceName = emailSequence.name
-                  formData.numEmails = emailSequence.steps
-                  formData.wordCount = emailSequence.word_count
-                  selectedCopyType = emailSequence.copy_type
-                  handleLoad()
-                }}
-              >
-                Open
-              </button></td
+    <div class="main-list">
+      {#each $emailSequences as emailSequence (emailSequence.id)}
+        <div
+          class="email-box {$isSelectionMode
+            ? 'hover-mode selection-mode'
+            : ''}"
+          on:mouseenter={() => event.currentTarget.classList.add("hover-mode")}
+          on:mouseleave={() =>
+            event.currentTarget.classList.remove("hover-mode")}
+        >
+          <input
+            type="checkbox"
+            class="select-checkbox"
+            checked={$selectedSequences.has(emailSequence.id)}
+            on:click={() => isSelectionMode.set(true)}
+            on:change={() => {
+              toggleSelection(emailSequence.id)
+              if (!$selectedSequences.size) {
+                cancelSelection()
+              }
+            }}
+          />
+          <span
+            class="sequence-name"
+            on:click={() => {
+              currentEmailIndex = 1
+              currentEmailSequenceId = emailSequence.id
+              currentEmailSequenceName = emailSequence.name
+              formData.numEmails = emailSequence.steps
+              formData.wordCount = emailSequence.word_count
+              selectedCopyType = emailSequence.copy_type
+              handleLoad()
+            }}>{emailSequence.name}</span
+          >
+          <div class="actions">
+            <!-- <button
+              class="btn btn-outline"
+              on:click={() => {
+                currentEmailIndex = 1
+                currentEmailSequenceId = emailSequence.id
+                currentEmailSequenceName = emailSequence.name
+                formData.numEmails = emailSequence.steps
+                formData.wordCount = emailSequence.word_count
+                selectedCopyType = emailSequence.copy_type
+                handleLoad()
+              }}
             >
+              Open
+            </button> -->
+            <button
+              class="btn btn-outline"
+              on:click={() => openRenameModal(emailSequence)}>Rename</button
+            >
+            <button
+              class="btn btn-outline"
+              on:click={() => {
+                deletingSequence = true
+                openDeleteModal(emailSequence)
+              }}>Delete</button
+            >
+          </div>
+        </div>
+      {/each}
 
-            <td>
-              <button
-                class="btn btn-outline"
-                on:click={() => openRenameModal(emailSequence)}
-              >
-                Rename
-              </button>
-            </td>
-            <td>
-              <button
-                class="btn btn-outline"
-                on:click={() => openDeleteModal(emailSequence)}
-              >
-                Delete
-              </button>
-            </td>
-
-            <!-- Add other table cells as needed -->
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>NAME</th>
+            <th>STEPS</th>
+            <th>MODIFIED</th>
+            <!-- Add other table headers as needed -->
           </tr>
-        {/each}
-      </tbody>
-    </table>
-    <button
-      class="btn btn-primary"
-      on:click={loadMore}
-      disabled={!hasMoreRecords || isLoadingNewSequences}
-    >
-      {#if !hasMoreRecords}
-        No More Records
-      {:else}
-        {isLoadingNewSequences ? "Loading..." : "Show More"}
-      {/if}
-    </button>
+        </thead>
+        <tbody>
+          {#each $emailSequences as emailSequence (emailSequence.id)}
+            <tr>
+              <td>{emailSequence.id}</td>
+              <td>{emailSequence.name}</td>
+              <td>{emailSequence.steps}</td>
+              <td>{formatDate(emailSequence.updated_at)}</td>
+              <td>
+                <button
+                  class="btn btn-outline"
+                  on:click={() => {
+                    currentEmailIndex = 1
+                    currentEmailSequenceId = emailSequence.id
+                    currentEmailSequenceName = emailSequence.name
+                    formData.numEmails = emailSequence.steps
+                    formData.wordCount = emailSequence.word_count
+                    selectedCopyType = emailSequence.copy_type
+                    handleLoad()
+                  }}
+                >
+                  Open
+                </button></td
+              >
+
+              <td>
+                <button
+                  class="btn btn-outline"
+                  on:click={() => openRenameModal(emailSequence)}
+                >
+                  Rename
+                </button>
+              </td>
+              <td>
+                <button
+                  class="btn btn-outline"
+                  on:click={() => {
+                    deletingSequence = true
+                    openDeleteModal(emailSequence)
+                  }}
+                >
+                  Delete
+                </button>
+              </td>
+
+              <!-- Add other table cells as needed -->
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <button
+        class="btn btn-primary"
+        on:click={loadMore}
+        disabled={!hasMoreRecords || isLoadingNewSequences}
+      >
+        {#if !hasMoreRecords}
+          No More Records
+        {:else}
+          {isLoadingNewSequences ? "Loading..." : "Show More"}
+        {/if}
+      </button>
+    </div>
   {/if}
 </main>
 
@@ -906,7 +1142,13 @@
         <li>
           <button
             class="red"
-            on:click={deleteEmailSequence}
+            on:click={() => {
+              if (deletingSequence) {
+                deleteEmailSequence()
+              } else if (deletingSelectedSequences) {
+                deleteSelected()
+              }
+            }}
             disabled={isSaving}
           >
             {#if isSaving}Deleting...{:else}Delete{/if}
@@ -1098,6 +1340,7 @@
   }
   .main-content {
     will-change: filter;
+    width: 100%;
   }
   .main-content.blurred {
     filter: blur(5px);
@@ -1163,5 +1406,78 @@
 
   .copy-type-modal button.red:hover {
     background: #c9302c;
+  }
+
+  .email-box {
+    display: flex;
+    /* justify-content: space-between; */
+    padding: 10px;
+    border: 1px solid #ccc;
+    margin-bottom: 10px;
+    position: relative;
+    max-width: 900px;
+  }
+
+  .email-box:hover .actions {
+    display: flex;
+  }
+
+  .actions {
+    display: none;
+    position: absolute;
+    right: -20px;
+    top: 0px;
+    scale: 0.5;
+  }
+
+  .sequence-name {
+    cursor: pointer;
+  }
+
+  @media (max-width: 768px) {
+    .actions {
+      display: flex;
+      /* position: relative; */
+      margin-left: auto;
+      margin-right: -70px;
+    }
+    .sequence-name {
+      cursor: pointer;
+      max-width: 70%;
+    }
+  }
+
+  .bulk-actions {
+    scale: 0.7;
+    margin-left: -3rem;
+    position: fixed;
+  }
+
+  .select-checkbox {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .select-checkbox {
+      display: inline-block;
+      margin-right: 20px;
+      margin-top: 2px;
+    }
+  }
+
+  .hover-mode .select-checkbox {
+    display: inline-block;
+    margin-right: 20px;
+    margin-top: 2px;
+  }
+
+  .selection-mode .select-checkbox {
+    display: inline-block;
+    margin-right: 20px;
+    margin-top: 2px;
+  }
+  .main-list {
+    padding-top: 50px;
+    width: 100%;
   }
 </style>

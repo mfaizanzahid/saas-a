@@ -290,6 +290,7 @@ let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply
     const newEmailId = formData.get("emailId") as string ?? null
     const newEmailSequenceId = formData.get("emailSequenceId") as string ?? null
     const previousEmailId = formData.get("previousEmailId") as string ?? null
+    const isRegenerate = formData.get("isRegenerate") as string ?? null
     
     const currentEmailIndex = Number(formData.get("currentEmailIndex"))
     const steps = formData.get("steps")
@@ -306,9 +307,12 @@ let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply
 if (newEmailSequenceId) {
 
 
-if(previousEmailId) {
-  fetchPromptEmailIndex = currentEmailIndex - 1
-} else {fetchPromptEmailIndex = currentEmailIndex + 1}
+if(isRegenerate=='1') {
+  fetchPromptEmailIndex = currentEmailIndex
+} else {fetchPromptEmailIndex = currentEmailIndex - 1 }
+
+console.log("FETCH PROMPT EMAIL INDEX",fetchPromptEmailIndex)
+
 try {
 
   const { data: currentEmailData, error: currentEmailError } = await supabase
@@ -317,7 +321,7 @@ try {
     .eq('copy_collection_id', newEmailSequenceId)
     .eq('index', fetchPromptEmailIndex);
 
-// console.log("DATABASE RESULT",currentEmailData)
+console.log("DATABASE RESULT",currentEmailData)
 
   prompt = currentEmailData[0]?.prompt;
   console.log ("FETCHED CURRENT PROMPT",prompt)
@@ -717,7 +721,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
       .range(offset, offset + limit - 1);
-        console.log("FETCH SEQUENCES",emailSequences)
+        // console.log("FETCH SEQUENCES",emailSequences)
         console.log("FETCHED SEQUENCES")
         
       if (error) {
@@ -867,6 +871,47 @@ console.log("DELETED SEQUENCE",data)
         throw new Error('Error deleting email sequence');
       }
 
+      return {
+        status: 200,
+        body: JSON.stringify(data),
+      };
+    } catch (error) {
+      console.error('Error deleting email sequence:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error deleting email sequence' },
+      }
+
+}
+  },
+
+  deleteSelectedSequences: async ({ request, locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,  
+        body: { errorMessage: 'User not authenticated' },
+      };
+    } 
+
+    const formData = await request.formData();
+    const deleteIds = formData.get("deleteIds");
+console.log("DELETE IDS",deleteIds);
+
+    try {
+      const { data, error } = await supabase
+        .from("copy_collection")
+        .delete()
+        .eq("user_id", userId)
+        .in("id", deleteIds.split(",").map(Number));
+
+console.log("DELETED SEQUENCE",data)
+      if (error) {
+        console.error('Error deleting email sequence:', error);
+        throw new Error('Error deleting email sequence');
+      }
       return {
         status: 200,
         body: JSON.stringify(data),
