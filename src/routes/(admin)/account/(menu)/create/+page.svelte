@@ -262,8 +262,9 @@
   async function handleGenerate() {
     isLoading = true
     isGenerating = true
+
     /*add 1 to updatedRecordCount to track the number of records fetched so far*/
-    updatedRecordCount++
+    // updatedRecordCount++
 
     showForm.set(false)
     console.log("CURRENT INDEX", currentEmailIndex)
@@ -433,6 +434,13 @@
       } else {
         // Append new results for subsequent pages
         emailSequences.update((existing) => [...existing, ...jsonDataC])
+
+        //  // Append new results for subsequent pages, ignoring duplicates
+        //  const existingIds = $emailSequences.map((s) => s.id)
+        // const newSequences = jsonDataC.filter(
+        //   (s) => !existingIds.includes(s.id),
+        // )
+        // emailSequences.update((existing) => [...existing, ...newSequences])
       }
       updatedRecordCount = $emailSequences.length
       console.log("UPDATED RECORD COUNT", updatedRecordCount)
@@ -462,6 +470,7 @@
       const result = await response.json()
       const jsonData = JSON.parse(result.data)
       const jsonDataC = JSON.parse(jsonData[1])
+
       const sortedSequences = jsonDataC.sort(
         (a, b) => b.updated_at - a.updated_at,
       )
@@ -624,6 +633,10 @@
         displayedText += text[index]
         index++
         setTimeout(typeNextChar, typingSpeed)
+        const replyTextAreaDiv = document.getElementById("replyTextArea")
+        if (replyTextAreaDiv) {
+          replyTextAreaDiv.scrollTop = replyTextAreaDiv.scrollHeight
+        }
       } else {
         isTyping = false
       }
@@ -657,6 +670,14 @@
   {#if isLoading || isLoadingSequences}
     <div class="spinner-container">
       <span class="loading loading-dots loading-lg text-primary"></span>
+
+      <p class="text-center text-sm mt-2 text-gray-400">
+        {#if isGenerating}
+          Crafting magical copy for you...
+        {:else}
+          Loading...
+        {/if}
+      </p>
     </div>
   {/if}
 
@@ -1205,6 +1226,7 @@
     align-items: center;
     justify-content: center;
     height: 80vh;
+    flex-direction: column;
   }
 
   .spinner {
