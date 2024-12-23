@@ -4,6 +4,7 @@
   import { onMount } from "svelte"
   import { writable } from "svelte/store"
   import { createClient } from "@supabase/supabase-js"
+  import { debounce } from "lodash"
 
   import { PUBLIC_SUPABASE_URL } from "$env/static/public"
   import { PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public"
@@ -104,6 +105,10 @@
   let isTyping = false
   let displayedText = "" // The text progressively shown with the typing effect
   let typingSpeed = 2 // Adjust the typing speed (milliseconds per character)
+
+  let searchTerm = ""
+  let resultsCount = 0
+  let isSearching = false
 
   function openRenameModal(sequence) {
     currentSequence = sequence
@@ -405,7 +410,7 @@
 
   async function fetchEmailSequences(page = 1) {
     // if (!hasMoreRecords) return // Exit if no more records or already loading
-    isLoadingSequences = true
+    // isLoadingSequences = true
 
     const formDataString = `page=${page}&limit=${itemsPerPage}`
 
@@ -455,9 +460,9 @@
 
   async function fetchUpdatedEmailSequences() {
     // if (!hasMoreRecords) return // Exit if no more records or already loading
-    isLoadingSequences = true
+    // isLoadingSequences = true
 
-    const formDataString = `page=1&limit=${updatedRecordCount}`
+    const formDataString = `page=1&limit=${updatedRecordCount}&searchTerm=${searchTerm}`
 
     const response = await fetch("/account/api?/getEmailSequences", {
       method: "POST",
@@ -649,6 +654,49 @@
 
   // onMount(fetchEmailSequences)
 
+  // Search email sequences from the server
+  const fetchResults = debounce(async () => {
+    if (searchTerm.length >= 6) {
+      isSearching = true
+
+      try {
+        // const res = await fetch(`/api/search?query=${searchTerm}`)
+        // const data = await res.json()
+
+        // // Update the store with the fetched data
+        // emailSequences.set(data.emailSequences || [])
+
+        const formDataString = `page=1&limit=${updatedRecordCount}&searchTerm=${searchTerm}`
+
+        const response = await fetch("/account/api?/getEmailSequences", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formDataString,
+        })
+        if (response.ok) {
+          const result = await response.json()
+          const jsonData = JSON.parse(result.data)
+          const jsonDataC = JSON.parse(jsonData[1])
+          emailSequences.set(jsonDataC)
+        }
+
+        resultsCount = $emailSequences.length || 0
+      } catch (error) {
+        console.error("Error fetching results:", error)
+        emailSequences.set([]) // Clear the store in case of error
+        resultsCount = 0
+      }
+    } else {
+      // emailSequences.set([]) // Clear the store for shorter terms
+      resultsCount = 0
+    }
+  }, 300) // 300ms debounce delay
+
+  // Trigger search when searchTerm changes
+  $: fetchResults()
+
   onMount(() => {
     fetchEmailSequences(currentPage)
     fetchCopyTypes()
@@ -658,12 +706,12 @@
 <div>
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
     <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
-    <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button>
+    <!-- <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button> -->
   {/if}
 </div>
 
 <main
-  class="main-content {isCopyTypeModalOpen || isDeleteModalOpen
+  class="main-content {isModalOpen || isCopyTypeModalOpen || isDeleteModalOpen
     ? 'blurred'
     : ''}"
 >
@@ -998,14 +1046,45 @@
   {/if}
 
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
+    <div class="main-head">
+      <div class="search-box border-solid rounded border border-gray-300">
+        <input
+          type="text"
+          placeholder="Search your copy collections..."
+          bind:value={searchTerm}
+          on:input={() => {
+            if (searchTerm.length === 0) {
+              fetchUpdatedEmailSequences()
+              isSearching = false
+            } else {
+              fetchResults()
+            }
+          }}
+        />
+
+        {#if searchTerm.length >= 6}
+          <p>
+            There’s {resultsCount} copy collections matching “{searchTerm}”
+          </p>
+        {/if}
+      </div>
+      <div>
+        <button class="btn btn-warning" on:click={openCopyTypeModal}
+          >+ Create New</button
+        >
+      </div>
+    </div>
+
     {#if $isSelectionMode}
       <div class="bulk-actions">
-        <button class="btn btn-outline" on:click={selectAll}>Select All</button>
-        <button class="btn btn-outline" on:click={cancelSelection}
+        <button class="btn btn-outline text-base" on:click={selectAll}
+          >Select All</button
+        >
+        <button class="btn btn-outline text-base" on:click={cancelSelection}
           >Cancel</button
         >
         <button
-          class="btn btn-outline"
+          class="btn btn-outline text-base"
           on:click={() => {
             deletingSelectedSequences = true
             openSelectedDeleteModal()
@@ -1019,7 +1098,7 @@
     <div class="main-list">
       {#each $emailSequences as emailSequence (emailSequence.id)}
         <div
-          class="email-box {$isSelectionMode
+          class="email-box border-solid rounded border border-gray-300 {$isSelectionMode
             ? 'hover-mode selection-mode'
             : ''}"
           on:mouseenter={() => event.currentTarget.classList.add("hover-mode")}
@@ -1066,11 +1145,11 @@
               Open
             </button> -->
             <button
-              class="btn btn-outline"
+              class="btn btn-outline text-lg mr-2"
               on:click={() => openRenameModal(emailSequence)}>Rename</button
             >
             <button
-              class="btn btn-outline"
+              class="btn btn-outline text-lg mr-2"
               on:click={() => {
                 deletingSequence = true
                 openDeleteModal(emailSequence)
@@ -1083,9 +1162,9 @@
       <button
         class="btn btn-primary"
         on:click={loadMore}
-        disabled={!hasMoreRecords || isLoadingNewSequences}
+        disabled={!hasMoreRecords || isLoadingNewSequences || isSearching}
       >
-        {#if !hasMoreRecords}
+        {#if !hasMoreRecords || isSearching}
           No More Records
         {:else}
           {isLoadingNewSequences ? "Loading..." : "Show More"}
@@ -1096,15 +1175,41 @@
 </main>
 
 {#if isModalOpen}
-  <div class="modala">
-    <label for="newName">New Name:</label>
-    <input bind:value={newName} id="newName" />
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeRenameModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <p class="mt-2 mb-4 text-center text-xl font-semibold text-neutral">
+        Rename
+      </p>
+      <div class="border-2 rounded-md p-2">
+        <input class="text-neutral w-full" bind:value={newName} id="newName" />
+      </div>
+      <ul>
+        <li>
+          <button
+            class="btn btn-success btn-wide"
+            on:click={saveName}
+            disabled={isSaving}
+          >
+            {#if isSaving}Saving...{:else}Save{/if}
+          </button>
+        </li>
 
-    <button on:click={saveName} disabled={isSaving}>
-      {#if isSaving}Saving...{:else}Save{/if}
-    </button>
-
-    <button on:click={closeRenameModal} disabled={isSaving}> Cancel </button>
+        <li>
+          <button
+            class="btn btn-error btn-wide"
+            on:click={closeRenameModal}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+        </li>
+      </ul>
+    </div>
   </div>
 {/if}
 
@@ -1116,12 +1221,14 @@
     on:click={closeDeleteModal}
   >
     <div class="copy-type-modal" role="document" on:click|stopPropagation>
-      <h3>Confirm Delete?</h3>
+      <p class="mt-2 mb-4 text-center text-xl font-semibold text-neutral">
+        Confirm Delete?
+      </p>
 
       <ul>
         <li>
           <button
-            class="red"
+            class="btn btn-error btn-wide"
             on:click={() => {
               if (deletingSequence) {
                 deleteEmailSequence()
@@ -1135,7 +1242,11 @@
           </button>
         </li>
         <li>
-          <button on:click={closeDeleteModal} disabled={isSaving}>
+          <button
+            class="btn btn-success btn-wide"
+            on:click={closeDeleteModal}
+            disabled={isSaving}
+          >
             Cancel
           </button>
         </li>
@@ -1152,22 +1263,36 @@
     on:click={closeCopyTypeModal}
   >
     <div class="copy-type-modal" role="document" on:click|stopPropagation>
-      <h3>Select Copy Type</h3>
+      <p class="mt-2 mb-5 text-center text-xl font-semibold text-neutral">
+        Select Copy Type
+      </p>
       <ul>
         {#each $copyTypes as type (type.id)}
           <li>
-            <button on:click={() => handleCopyTypeSelection(type)}>
+            <button
+              class="btn btn-success btn-wide normal-case"
+              on:click={() => handleCopyTypeSelection(type)}
+            >
               {type.name}
             </button>
           </li>
         {/each}
       </ul>
-      <button class="red" on:click={closeCopyTypeModal}>Cancel</button>
+      <button class="btn btn-error btn-wide" on:click={closeCopyTypeModal}
+        >Cancel</button
+      >
     </div>
   </div>
 {/if}
 
 <style>
+  input:focus {
+    outline: none; /* Removes the black border */
+  }
+  .btn {
+    text-transform: none;
+  }
+
   main {
     background: rgba(255, 255, 255, 0); /* Transparent white background */
   }
@@ -1175,9 +1300,9 @@
     text-transform: uppercase;
   }
   .plus-sign {
-    position: absolute;
+    /* position: absolute;
     top: 10px;
-    right: 60px;
+    right: 60px; */
     font-size: 18px;
     background: #4caf50;
     color: white;
@@ -1365,7 +1490,7 @@
     margin: 10px 0;
   }
 
-  .copy-type-modal button {
+  /* .copy-type-modal button {
     width: 100%;
     padding: 10px;
     border: none;
@@ -1374,29 +1499,30 @@
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.2s ease;
-  }
-
+  } */
+  /* 
   .copy-type-modal button:hover {
     background: #45a049;
   }
 
   /* Cancel button styling */
-  .copy-type-modal button.red {
-    background: #d9534f; /* Red for cancel */
-  }
+  /* .copy-type-modal button.red {
+    background: #d9534f;
+  } */
 
-  .copy-type-modal button.red:hover {
+  /* .copy-type-modal button.red:hover {
     background: #c9302c;
-  }
+  } */
 
   .email-box {
     display: flex;
     /* justify-content: space-between; */
     padding: 10px;
-    border: 1px solid #ccc;
+    /* border: 1px solid #ccc; */
     margin-bottom: 10px;
     position: relative;
-    max-width: 900px;
+    max-width: 100%;
+    align-items: center; /* Vertically centers child elements, including .sequence-name */
   }
 
   .email-box:hover .actions {
@@ -1428,6 +1554,10 @@
     .sequence-name {
       cursor: pointer;
       max-width: 70%;
+    }
+    .email-box {
+      max-width: 100%;
+      min-height: 65px; /* Ensure consistent min-height */
     }
   }
 
@@ -1463,5 +1593,42 @@
   .main-list {
     padding-top: 50px;
     width: 100%;
+  }
+
+  .search-box {
+    /* margin-top: 20px; */
+    /* border: 1px solid #ccc;
+    border-radius: 5px; */
+    padding: 10px;
+    max-width: 100%;
+    flex: 1;
+    margin-right: 10px;
+  }
+  @media (max-width: 768px) {
+    .search-box {
+      max-width: 100%;
+    }
+  }
+  .search-box input {
+    width: 100%;
+    max-width: 500px;
+  }
+  .search-box p {
+    margin-top: 10px;
+    color: #666;
+  }
+  .search-box ul {
+    list-style-type: none;
+    padding: 0;
+  }
+  .search-box li {
+    margin-top: 5px;
+    font-size: 14px;
+  }
+
+  .main-head {
+    display: flex;
+    /* justify-content: space-between; */
+    align-items: center;
   }
 </style>

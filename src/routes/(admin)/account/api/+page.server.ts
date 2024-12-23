@@ -694,25 +694,54 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
     const formData = await request.formData()
     console.log("FETCH SEQUENCES FORM DATAAAA",formData)
     
+    const searchTerm = formData.get('searchTerm');
     const page = parseInt(formData.get('page'));
   const limit = parseInt(formData.get('limit'));
+
   const offset = (page - 1) * limit;
 
     try {
 
         
       // Fetch email sequences for the logged-in user
+
+      // const { data: emailSequences, error } = await supabase
+      // .from('copy_collection')
+      // .select('id,name,created_at,updated_at,steps,word_count,copy_type') //avoid passing user_id
+      // // .select()
+      // .eq('user_id', userId)
+      // .order('updated_at', { ascending: false })
+      // .range(offset, offset + limit - 1);
+      //   // console.log("FETCH SEQUENCES",emailSequences)
+      //   console.log("FETCHED SEQUENCES")
+
+console.log("SEARCH TERM",searchTerm)
       
-      const { data: emailSequences, error } = await supabase
+      let { data: emailSequences, error } = await supabase
       .from('copy_collection')
       .select('id,name,created_at,updated_at,steps,word_count,copy_type') //avoid passing user_id
       // .select()
       .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-        // console.log("FETCH SEQUENCES",emailSequences)
-        console.log("FETCHED SEQUENCES")
+
+      if(searchTerm) {
+        console.log('SEARCHING NOW......')
+        emailSequences = (await supabase
+        .from('copy_collection')
+        .select('id,name,created_at,updated_at,steps,word_count,copy_type')
+        .ilike('name', `%${searchTerm}%`)
+        .order('updated_at')).data;
+      } else {
+        console.log('JUST FETCHING......')
+        emailSequences = (await supabase
+        .from('copy_collection')
+        .select('id,name,created_at,updated_at,steps,word_count,copy_type')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .range(offset, offset + limit - 1)).data;
         
+      }
+      console.log("FETCHED SEQUENCES")
+
       if (error) {
         console.error('Error fetching email sequences:', error);
         throw new Error('Error fetching email sequences');
