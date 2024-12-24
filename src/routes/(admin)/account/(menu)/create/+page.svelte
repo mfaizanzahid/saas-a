@@ -109,6 +109,12 @@
   let searchTerm = ""
   let resultsCount = 0
   let isSearching = false
+  let progress = 0 // Progress percentage
+  let intervalId
+  let isStepRename = false
+  let isStepDelete = false
+  let isStepModalOpen = false
+  let deleteConfirm
 
   function openRenameModal(sequence) {
     currentSequence = sequence
@@ -118,6 +124,12 @@
     isModalOpen = true
 
     console.log("OPEN MODAL", currentSequence, newName, isModalOpen)
+  }
+
+  function openStepModal() {
+    isStepModalOpen = true
+    newName = currentEmailSequenceName
+    currentSequenceId = currentEmailSequenceId
   }
 
   function openDeleteModal(sequence) {
@@ -136,6 +148,10 @@
 
   function closeRenameModal() {
     isModalOpen = false
+  }
+
+  function closeStepModal() {
+    isStepModalOpen = false
   }
 
   function closeDeleteModal() {
@@ -167,6 +183,10 @@
 
         closeRenameModal()
         fetchUpdatedEmailSequences()
+
+        if ((isStepModalOpen = true)) {
+          currentEmailSequenceName = newName
+        }
       } else {
         console.error("Update Name failed")
         // Handle error appropriately
@@ -176,6 +196,7 @@
       // Handle error
     } finally {
       isSaving = false
+      isStepModalOpen = false
     }
   }
 
@@ -200,6 +221,16 @@
         // const newNameValue = jsonData[3]
         // newName = newNameValue
 
+        if ((isStepModalOpen = true)) {
+          currentEmailSequenceName = newName
+          currentEmailIndex = 0
+          currentEmailId = ""
+          currentEmailSequenceId = ""
+          reply = ""
+          previousEmailId = null
+          nextEmailId = null
+        }
+
         closeDeleteModal()
         fetchUpdatedEmailSequences()
       } else {
@@ -212,6 +243,7 @@
     } finally {
       isSaving = false
       deletingSequence = false
+      isStepModalOpen = false
     }
   }
 
@@ -267,6 +299,14 @@
   async function handleGenerate() {
     isLoading = true
     isGenerating = true
+    progress = 0
+
+    // Start a timer to update the progress
+    intervalId = setInterval(() => {
+      if (progress < 99) {
+        progress += 1 // Simulate progress
+      }
+    }, 150)
 
     /*add 1 to updatedRecordCount to track the number of records fetched so far*/
     // updatedRecordCount++
@@ -328,6 +368,10 @@
         reply = replyValue
         // Update the reply variable with the fetched data
         // reply = reply;
+
+        // Process result
+        progress = 100 // Mark progress complete
+
         console.log("CURRENT PROMPT", prompt)
         console.log("SEQ NAME", currentEmailSequenceName)
 
@@ -347,6 +391,7 @@
       isLoading = false
       isRegenerate = 0
       isGenerating = false
+      clearInterval(intervalId) // Stop the timer
       // Trigger the typing effect when the component mounts or reply updates
       typeText(reply)
     }
@@ -711,7 +756,10 @@
 </div>
 
 <main
-  class="main-content {isModalOpen || isCopyTypeModalOpen || isDeleteModalOpen
+  class="main-content {isModalOpen ||
+  isStepModalOpen ||
+  isCopyTypeModalOpen ||
+  isDeleteModalOpen
     ? 'blurred'
     : ''}"
 >
@@ -721,6 +769,11 @@
 
       <p class="text-center text-sm mt-2 text-gray-400">
         {#if isGenerating}
+          <div class="progress-container">
+            <div class="progress-bar bg-primary" style="width: {progress}%;">
+              <span class="progress-text">{progress}%</span>
+            </div>
+          </div>
           Crafting magical copy for you...
         {:else}
           Loading...
@@ -906,7 +959,7 @@
         ></textarea> -->
         <div
           id="replyTextArea"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline h-80vh overflow-auto"
+          class="w-full p-2 border rounded-md focus:outline-none focus:shadow-outline overflow-auto h-[75vh]"
           style="white-space: pre-wrap"
         >
           {#if !isTyping}
@@ -957,16 +1010,44 @@
       </div>
 
       <div class="button-container">
-        <div class="all-caps">
-          {currentEmailSequenceName} <br /> SEQUENCE ID # {currentEmailSequenceId}
-          / STEP # {currentEmailIndex} / TOTAL STEPS: {formData.numEmails}
+        <div
+          class="flex justify-center mt-1 py-2 rounded-md items-center hover:bg-base-200 cursor-pointer"
+          on:click={() => {
+            openStepModal()
+            isStepModalOpen = true
+          }}
+        >
+          <div class="all-caps">
+            {currentEmailSequenceName}
+          </div>
+          <div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#000000"
+              stroke-width="1"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              style="margin-left: 0.5rem;"
+            >
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
         </div>
+        <div class="mb-3">
+          SEQUENCE ID # {currentEmailSequenceId}
+          / STEP {currentEmailIndex} OF {formData.numEmails}
+        </div>
+
         <button
           on:click={() => {
             currentEmailIndex = 0
             currentEmailId = ""
             currentEmailSequenceId = ""
-            reply = null
+            reply = ""
             previousEmailId = null
             nextEmailId = null
             // fetchEmailSequences()
@@ -1149,7 +1230,7 @@
               on:click={() => openRenameModal(emailSequence)}>Rename</button
             >
             <button
-              class="btn btn-outline text-lg mr-2"
+              class="btn btn-outline text-lg `mr-2"
               on:click={() => {
                 deletingSequence = true
                 openDeleteModal(emailSequence)
@@ -1201,11 +1282,69 @@
 
         <li>
           <button
-            class="btn btn-error btn-wide"
+            class="btn btn-wide"
             on:click={closeRenameModal}
             disabled={isSaving}
           >
             Cancel
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+{/if}
+
+{#if isStepModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeStepModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <p class="mt-2 mb-4 text-center text-xl font-semibold text-neutral">
+        Edit Your Copy Collection
+      </p>
+      <div class="border-2 rounded-md p-2">
+        <input class="text-neutral w-full" bind:value={newName} id="newName" />
+      </div>
+      <ul>
+        <li>
+          <button
+            class="btn btn-success btn-wide"
+            on:click={saveName}
+            disabled={isSaving}
+          >
+            {#if isSaving}Saving...{:else}Rename{/if}
+          </button>
+        </li>
+
+        <li>
+          <button
+            class="btn btn-wide"
+            on:click={closeStepModal}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+        </li>
+        <li>
+          <button
+            class="btn btn-error btn-wide"
+            on:click={() => {
+              if (deleteConfirm) {
+                deleteEmailSequence()
+              } else {
+                deleteConfirm = true
+                setTimeout(() => {
+                  deleteConfirm = false
+                }, 5000)
+              }
+            }}
+            disabled={isSaving}
+          >
+            {#if isSaving}Deleting...{:else if deleteConfirm}Confirm Delete?{:else}Delete
+              Collection{/if}
           </button>
         </li>
       </ul>
@@ -1243,7 +1382,7 @@
         </li>
         <li>
           <button
-            class="btn btn-success btn-wide"
+            class="btn btn-wide"
             on:click={closeDeleteModal}
             disabled={isSaving}
           >
@@ -1278,9 +1417,7 @@
           </li>
         {/each}
       </ul>
-      <button class="btn btn-error btn-wide" on:click={closeCopyTypeModal}
-        >Cancel</button
-      >
+      <button class="btn btn-wide" on:click={closeCopyTypeModal}>Cancel</button>
     </div>
   </div>
 {/if}
@@ -1373,6 +1510,7 @@
   }
   .textarea-container {
     position: relative;
+    /* height: 76vh; */
   }
 
   .copy-button {
@@ -1389,9 +1527,9 @@
     cursor: not-allowed;
     opacity: 0.6;
   }
-  .h-80vh {
+  /* .h-80vh {
     height: 80vh;
-  }
+  } */
   .resize-none {
     resize: none;
   }
@@ -1630,5 +1768,33 @@
     display: flex;
     /* justify-content: space-between; */
     align-items: center;
+  }
+  .progress-container {
+    width: 100%;
+    background-color: #f3f3f3;
+    border-radius: 8px;
+    margin: 10px 0;
+    position: relative;
+    height: 20px;
+    overflow: hidden; /* Ensures text doesn't overflow the container */
+  }
+
+  .progress-bar {
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.2s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Centers the text horizontally */
+    color: white; /* Text color to contrast with the bar background */
+    font-weight: bold;
+  }
+
+  .progress-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    pointer-events: none; /* Prevents interaction with the text */
   }
 </style>
