@@ -7,16 +7,37 @@
 
   export let data
   let { supabase } = data
-
+  let currentUser = null // Track the current user
   onMount(() => {
-    supabase.auth.onAuthStateChange((event) => {
-      // Redirect to account after sucessful login
-      if (event == "SIGNED_IN") {
+    supabase.auth.onAuthStateChange((event, session) => {
+      console.log("AUTH EVENT", event)
+      const user = session?.user // Safely access the user object from the session
+
+      if (event === "SIGNED_IN" && user && user?.id !== currentUser?.id) {
+        currentUser = user // Update the current user to track subsequent state
+        console.log("CURRENT USER", currentUser)
+        setTimeout(() => {
+          goto("/account") // Redirect after successful login
+        }, 1)
+      }
+
+      // if (event == "SIGNED_IN") {
+      //   // Delay needed because order of callback not guaranteed.
+      //   // Give the layout callback priority to update state or
+      //   // we'll just bounch back to login when /account tries to load
+
+      //   setTimeout(() => {
+      //     goto("/account")
+      //   }, 1)
+      // }
+
+      if (event == "SIGNED_OUT") {
         // Delay needed because order of callback not guaranteed.
         // Give the layout callback priority to update state or
         // we'll just bounch back to login when /account tries to load
+
         setTimeout(() => {
-          goto("/account")
+          goto("/login/sign_in")
         }, 1)
       }
     })

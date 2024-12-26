@@ -431,7 +431,7 @@ promptAdd = promptA.replace(/\[|\]/g, '')
         messages: prompt,
         model: 'claude-3-5-haiku-latest',
       });
-      console.log("ANTHROPIC MESSAGEEEEEEEEEEEEEEEEE",message)
+      console.log("ANTHROPIC MESSAGEEE EEEEEEEEEEEEE",message)
 
 
       // console.log("REPLY",message.content);
@@ -724,14 +724,14 @@ console.log("SEARCH TERM",searchTerm)
       .eq('user_id', userId)
 
       if(searchTerm) {
-        console.log('SEARCHING NOW......')
+        console.log('SEARCHING NOW ......')
         emailSequences = (await supabase
         .from('copy_collection')
         .select('id,name,created_at,updated_at,steps,word_count,copy_type')
         .ilike('name', `%${searchTerm}%`)
         .order('updated_at')).data;
       } else {
-        console.log('JUST FETCHING......')
+        console.log('JUST FETCHING ......')
         emailSequences = (await supabase
         .from('copy_collection')
         .select('id,name,created_at,updated_at,steps,word_count,copy_type')

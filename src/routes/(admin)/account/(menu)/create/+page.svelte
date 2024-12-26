@@ -1177,41 +1177,43 @@
     <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
     <!-- <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button> -->
     <div class="main-list">
-      {#each $emailSequences as emailSequence (emailSequence.id)}
-        <div
-          class="email-box border-solid rounded border border-gray-300 {$isSelectionMode
-            ? 'hover-mode selection-mode'
-            : ''}"
-          on:mouseenter={() => event.currentTarget.classList.add("hover-mode")}
-          on:mouseleave={() =>
-            event.currentTarget.classList.remove("hover-mode")}
-        >
-          <input
-            type="checkbox"
-            class="select-checkbox"
-            checked={$selectedSequences.has(emailSequence.id)}
-            on:click={() => isSelectionMode.set(true)}
-            on:change={() => {
-              toggleSelection(emailSequence.id)
-              if (!$selectedSequences.size) {
-                cancelSelection()
-              }
-            }}
-          />
-          <span
-            class="sequence-name"
-            on:click={() => {
-              currentEmailIndex = 1
-              currentEmailSequenceId = emailSequence.id
-              currentEmailSequenceName = emailSequence.name
-              formData.numEmails = emailSequence.steps
-              formData.wordCount = emailSequence.word_count
-              selectedCopyType = emailSequence.copy_type
-              handleLoad()
-            }}>{emailSequence.name}</span
+      {#if $emailSequences.length > 0}
+        {#each $emailSequences as emailSequence (emailSequence.id)}
+          <div
+            class="email-box border-solid rounded border border-gray-300 {$isSelectionMode
+              ? 'hover-mode selection-mode'
+              : ''}"
+            on:mouseenter={() =>
+              event.currentTarget.classList.add("hover-mode")}
+            on:mouseleave={() =>
+              event.currentTarget.classList.remove("hover-mode")}
           >
-          <div class="actions">
-            <!-- <button
+            <input
+              type="checkbox"
+              class="select-checkbox"
+              checked={$selectedSequences.has(emailSequence.id)}
+              on:click={() => isSelectionMode.set(true)}
+              on:change={() => {
+                toggleSelection(emailSequence.id)
+                if (!$selectedSequences.size) {
+                  cancelSelection()
+                }
+              }}
+            />
+            <span
+              class="sequence-name"
+              on:click={() => {
+                currentEmailIndex = 1
+                currentEmailSequenceId = emailSequence.id
+                currentEmailSequenceName = emailSequence.name
+                formData.numEmails = emailSequence.steps
+                formData.wordCount = emailSequence.word_count
+                selectedCopyType = emailSequence.copy_type
+                handleLoad()
+              }}>{emailSequence.name}</span
+            >
+            <div class="actions">
+              <!-- <button
               class="btn btn-outline"
               on:click={() => {
                 currentEmailIndex = 1
@@ -1224,21 +1226,29 @@
               }}
             >
               Open
-            </button> -->
-            <button
-              class="btn btn-outline text-lg mr-2"
-              on:click={() => openRenameModal(emailSequence)}>Rename</button
-            >
-            <button
-              class="btn btn-outline text-lg `mr-2"
-              on:click={() => {
-                deletingSequence = true
-                openDeleteModal(emailSequence)
-              }}>Delete</button
-            >
+            </button>  -->
+              <button
+                class="btn btn-outline text-lg mr-2"
+                on:click={() => openRenameModal(emailSequence)}>Rename</button
+              >
+              <button
+                class="btn btn-outline text-lg `mr-2"
+                on:click={() => {
+                  deletingSequence = true
+                  openDeleteModal(emailSequence)
+                }}>Delete</button
+              >
+            </div>
           </div>
-        </div>
-      {/each}
+        {/each}
+      {:else}
+        <p class="mb-5">
+          No collections found. <span
+            on:click={openCopyTypeModal}
+            class="underline cursor-pointer">Create</span
+          > your first copy.
+        </p>
+      {/if}
 
       <button
         class="btn btn-primary"
