@@ -20,7 +20,14 @@
   <div class="drawer-content">
     <div class="navbar bg-base-100 lg:hidden">
       <div class="flex-1">
-        <a class="btn btn-ghost normal-case text-xl" href="/">SaaS Starter</a>
+        <!-- <a class="btn btn-ghost normal-case text-xl" href="/">SaaS Starter</a> -->
+        <a href="/"
+          ><img
+            src="/images/writepro-logo.png"
+            alt="writerpro"
+            class="w-[150px]"
+          /></a
+        >
       </div>
       <div class="flex-none">
         <div class="dropdown dropdown-end">
@@ -56,7 +63,15 @@
         <div
           class="normal-case menu-title text-xl font-bold text-primary flex flex-row"
         >
-          <a href="/" class="grow">Saas StarterA</a>
+          <a href="/"
+            ><img
+              src="/images/writepro-logo.png"
+              alt="writerpro"
+              class="w-[150px] pb-5"
+            /></a
+          >
+
+          <!-- <a href="/" class="grow">Saas StarterA</a> -->
           <label for="admin-drawer" class="lg:hidden ml-3"> &#x2715; </label>
         </div>
       </li>

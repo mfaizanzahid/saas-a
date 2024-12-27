@@ -2,9 +2,16 @@
   import "../../app.css"
 </script>
 
-<div class="navbar bg-base-100 container mx-auto">
+<div class="navbar bg-base-100 container mx-auto pl-4">
   <div class="flex-1">
-    <a class="btn btn-ghost normal-case text-xl" href="/">SaaS Starter</a>
+    <!-- <a class="btn btn-ghost normal-case text-xl" href="/">SaaS Starter</a> -->
+    <a href="/"
+      ><img
+        src="/images/writepro-logo.png"
+        alt="writerpro"
+        class="w-[150px]"
+      /></a
+    >
   </div>
   <div class="flex-none">
     <ul class="menu menu-horizontal px-1 hidden sm:flex font-bold text-lg">

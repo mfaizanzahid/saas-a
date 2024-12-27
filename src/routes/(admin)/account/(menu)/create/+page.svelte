@@ -928,7 +928,7 @@
         <button class="btn btn-neutral" on:click={toggleHideForm}
           >Go Back</button
         >
-        <button type="submit" class="btn btn-neutral">Generate</button>
+        <button type="submit" class="btn btn-success">Generate</button>
       </div>
     </form>
   {/if}
@@ -1055,7 +1055,7 @@
           }}
           class="btn btn-primary"
           disabled={isTyping}
-          >{#if currentEmailIndex < formData.numEmails}Start Over
+          >{#if currentEmailIndex < formData.numEmails}Back
           {:else}Finish{/if}
         </button>
         {#if currentEmailIndex > 0 && previousEmailId}
@@ -1419,7 +1419,7 @@
         {#each $copyTypes as type (type.id)}
           <li>
             <button
-              class="btn btn-success btn-wide normal-case"
+              class="btn btn-secondary btn-wide normal-case"
               on:click={() => handleCopyTypeSelection(type)}
             >
               {type.name}
