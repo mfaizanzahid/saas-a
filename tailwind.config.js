@@ -57,11 +57,11 @@ export default {
           
 "info-content": "#00060b",
           
-"success": "#00e081",
+"success": "#00ee89",
           
 "success-content": "#000604",
           
-"warning": "#f2ae00",
+"warning": "#ffec24",
           
 "warning-content": "#140b00",
           

@@ -89,7 +89,6 @@
   let isLoadingNewSequences = false
   let isLoadingSequences = true
   let hasMoreRecords = true // Tracks if there are more records to load
-  let updatedRecordCount = 0
   let deletingSequence = false
   let deletingSelectedSequences = false
   let isRegenerate = 0
@@ -97,6 +96,7 @@
 
   let currentPage = 1 // Tracks the current page
   const itemsPerPage = 10 // Number of results per page
+  let updatedRecordCount = itemsPerPage
 
   // Store for email sequences and selection state
   let isSelectionMode = writable(false)
@@ -493,6 +493,9 @@
         // emailSequences.update((existing) => [...existing, ...newSequences])
       }
       updatedRecordCount = $emailSequences.length
+      if (updatedRecordCount < 10) {
+        updatedRecordCount = 10
+      }
       console.log("UPDATED RECORD COUNT", updatedRecordCount)
 
       // emailSequences.set(jsonDataC)
@@ -506,6 +509,9 @@
   async function fetchUpdatedEmailSequences() {
     // if (!hasMoreRecords) return // Exit if no more records or already loading
     // isLoadingSequences = true
+    // if (updatedRecordCount < 10) {
+    //   updatedRecordCount = 10
+    // }
 
     const formDataString = `page=1&limit=${updatedRecordCount}&searchTerm=${searchTerm}`
 
@@ -638,6 +644,7 @@
         // )
 
         fetchUpdatedEmailSequences()
+        closeDeleteModal()
 
         selectedSequences.set(new Set())
         isSelectionMode.set(false)
@@ -711,6 +718,10 @@
         // // Update the store with the fetched data
         // emailSequences.set(data.emailSequences || [])
 
+        // if (updatedRecordCount < 10) {
+        //   updatedRecordCount = 10
+        // }
+
         const formDataString = `page=1&limit=${updatedRecordCount}&searchTerm=${searchTerm}`
 
         const response = await fetch("/account/api?/getEmailSequences", {
@@ -774,7 +785,13 @@
               <span class="progress-text">{progress}%</span>
             </div>
           </div>
-          Crafting magical copy for you...
+          <!-- Crafting... -->
+          {#if progress <= 30}
+            Thinking...
+          {/if}
+          {#if progress > 30}
+            Writing...
+          {/if}
         {:else}
           Loading...
         {/if}
@@ -1781,6 +1798,7 @@
   }
   .progress-container {
     width: 100%;
+    min-width: 200px;
     background-color: #f3f3f3;
     border-radius: 8px;
     margin: 10px 0;
