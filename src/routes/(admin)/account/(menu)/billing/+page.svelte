@@ -14,9 +14,12 @@
   export let data
 
   let currentPlanId = data.currentPlanId ?? defaultPlanId
-  let currentPlanName = pricingPlans.find(
-    (x) => x.id === data.currentPlanId,
-  )?.name
+
+  let currentPlanName = data.customerPlan
+
+  // let currentPlanName = pricingPlans.find(
+  //   (x) => x.id === data.currentPlanId,
+  // )?.name
 </script>
 
 <svelte:head>
@@ -44,6 +47,11 @@
     editable={false}
     fields={[
       { id: "plan", label: "Current Plan", initialValue: currentPlanName },
+      {
+        id: "credits",
+        label: "Remaining Credits",
+        initialValue: data.customerCredits,
+      },
     ]}
     editButtonTitle="Manage Subscripton"
     editLink="/account/billing/manage"

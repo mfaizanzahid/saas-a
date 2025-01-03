@@ -3,7 +3,7 @@ export const defaultPlanId = "free"
 export const pricingPlans = [
   {
     id: "free",
-    name: "Free",
+    name: "Basic Plan",
     description: "A free plan to get you started!",
     price: "$0",
     priceIntervalName: "per month",
@@ -12,7 +12,7 @@ export const pricingPlans = [
   },
   {
     id: "pro",
-    name: "Pro",
+    name: "Standard Plan",
     description:
       "A plan to test the purchase experience. Try buying this with the test credit card 4242424242424242.",
     price: "$15",
@@ -27,7 +27,7 @@ export const pricingPlans = [
   },
   {
     id: "enterprise",
-    name: "Enterprise",
+    name: "Premium Plan",
     description:
       "AAA plan to test the upgrade expereince. Try buying this with the test credit card 4242424242424242.",
     price: "$30",

@@ -47,6 +47,27 @@ export const actions = {
       email,
     }
   },
+/*************  ✨ Codeium Command ⭐  *************/
+/**
+ * Handles user password update requests.
+ * 
+ * This function validates and updates a user's password using the Supabase authentication system.
+ * It checks for the existence of a session, validates the new password according to specific criteria,
+ * and ensures the current password is correct unless the user is in a password recovery session.
+ * 
+ * @param {Object} context - Contains request and session-related information.
+ * @param {Request} context.request - The incoming request object.
+ * @param {Object} context.locals - Local context containing Supabase and session functions.
+ * @param {Function} context.locals.supabase - Supabase client for authentication.
+ * @param {Function} context.locals.getSession - Function to retrieve the current user session.
+ * 
+ * @throws Redirects to the login page if no session is found.
+ * @throws Redirects to an error page if the current password is incorrect.
+ * 
+ * @returns {Object} Contains the updated password fields if successful.
+ */
+
+/******  1aa7c55d-6c77-4e7f-8943-858353a177d3  *******/
   updatePassword: async ({ request, locals: { supabase, getSession } }) => {
     const session = await getSession()
     if (!session) {

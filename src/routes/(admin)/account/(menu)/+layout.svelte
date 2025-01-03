@@ -2,6 +2,7 @@
   import "../../../../app.css"
   import { writable } from "svelte/store"
   import { setContext } from "svelte"
+  import { invalidate } from "$app/navigation" // Add this import
 
   const adminSectionStore = writable("")
   setContext("adminSection", adminSectionStore)
@@ -10,8 +11,24 @@
     adminSection = value
   })
 
+  export let data
+  let customerCredits = data.customerCredits
+
   function closeDrawer(): void {
     document.getElementById("admin-drawer").checked = false
+  }
+
+  let isCreditLoading = false
+
+  // Add this function to refetch the data
+  async function refetchData() {
+    isCreditLoading = true
+    try {
+      await invalidate("app:customerData")
+      customerCredits = data.customerCredits
+    } finally {
+      isCreditLoading = false
+    }
   }
 </script>
 
@@ -175,8 +192,48 @@
           Settings
         </a>
       </li>
-
       <li class="mt-auto">
+        <span class="mt-auto text-base">
+          Credit Remaining: {customerCredits}
+          {#if isCreditLoading}
+            <svg
+              class="animate-spin h-4 w-4"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke="currentColor"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path stroke="none" d="M0 0h24v24H0z" />
+              <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -5v5h5" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5" /></svg
+            >
+          {:else}
+            <button on:click={refetchData} disabled={isCreditLoading}>
+              <svg
+                class="h-4 w-4"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                stroke-width="2"
+                stroke="currentColor"
+                fill="none"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path stroke="none" d="M0 0h24v24H0z" />
+                <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -5v5h5" />
+                <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5" /></svg
+              >
+            </button>
+          {/if}
+        </span>
+      </li>
+
+      <li class="mt-1">
         <a href="/account/sign_out" class="mt-auto text-base">Sign Out</a>
       </li>
     </ul>

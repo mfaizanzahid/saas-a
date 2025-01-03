@@ -9,7 +9,7 @@ export const getOrCreateCustomerId = async ({
 }) => {
   const { data: dbCustomer, error } = await supabaseServiceRole
     .from("stripe_customers")
-    .select("stripe_customer_id")
+    .select("stripe_customer_id, credits, plan, price")
     .eq("user_id", session.user.id)
     .single()
 
@@ -19,7 +19,7 @@ export const getOrCreateCustomerId = async ({
   }
 
   if (dbCustomer?.stripe_customer_id) {
-    return { customerId: dbCustomer.stripe_customer_id }
+    return { customerId: dbCustomer.stripe_customer_id, customerCredits: dbCustomer.credits, customerPlan: dbCustomer.plan, customerPrice: dbCustomer.price }
   }
 
   // Fetch data needed to create customer
@@ -51,6 +51,23 @@ export const getOrCreateCustomerId = async ({
   if (!customer.id) {
     return { error: "Unknown stripe user creation error" }
   }
+let basicPlan = "Basic Plan"
+
+  //In supabase table "plans" find the plan named Basic Plan and get the credits and price for it
+  const { data: plan, error: planError } = await supabaseServiceRole
+    .from("plans")
+    .select("credits, price")
+    .eq("name", basicPlan)
+    .single()
+  if (planError) {
+    return { error: planError }
+  }
+
+  //set variables for the credits and price of the Basic Plan
+  const credits = plan.credits
+  const price = plan.price
+
+
 
   // insert instead of upsert so we never over-write. PK ensures later attempts error.
   const { insertError } = await supabaseServiceRole
@@ -59,6 +76,10 @@ export const getOrCreateCustomerId = async ({
       user_id: session.user.id,
       stripe_customer_id: customer.id,
       updated_at: new Date(),
+      activated_at: new Date(),
+      credits: credits,
+      price: price,
+      plan: basicPlan,
     })
 
   if (insertError) {
