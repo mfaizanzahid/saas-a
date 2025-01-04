@@ -9,7 +9,7 @@ export const getOrCreateCustomerId = async ({
 }) => {
   const { data: dbCustomer, error } = await supabaseServiceRole
     .from("stripe_customers")
-    .select("stripe_customer_id, credits, plan, price")
+    .select("stripe_customer_id, credits, plan, price,total_credits")
     .eq("user_id", session.user.id)
     .single()
 
@@ -19,7 +19,7 @@ export const getOrCreateCustomerId = async ({
   }
 
   if (dbCustomer?.stripe_customer_id) {
-    return { customerId: dbCustomer.stripe_customer_id, customerCredits: dbCustomer.credits, customerPlan: dbCustomer.plan, customerPrice: dbCustomer.price }
+    return { customerId: dbCustomer.stripe_customer_id, customerCredits: dbCustomer.credits, totalCredits: dbCustomer.total_credits, customerPlan: dbCustomer.plan, customerPrice: dbCustomer.price }
   }
 
   // Fetch data needed to create customer

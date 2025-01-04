@@ -13,6 +13,7 @@
 
   export let data
   let customerCredits = data.customerCredits
+  let totalCredits = data.totalCredits
 
   function closeDrawer(): void {
     document.getElementById("admin-drawer").checked = false
@@ -26,6 +27,7 @@
     try {
       await invalidate("app:customerData")
       customerCredits = data.customerCredits
+      totalCredits = data.totalCredits
     } finally {
       isCreditLoading = false
     }
@@ -194,7 +196,7 @@
       </li>
       <li class="mt-auto">
         <span class="mt-auto text-base">
-          Credit Remaining: {customerCredits}
+          Credits Remaining: {customerCredits} / {totalCredits}
           {#if isCreditLoading}
             <svg
               class="animate-spin h-4 w-4"
