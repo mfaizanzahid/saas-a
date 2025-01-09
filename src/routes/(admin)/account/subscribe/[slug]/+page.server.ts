@@ -13,6 +13,10 @@ export const load: PageServerLoad = async ({
   url,
   locals: { supabase, getSession, supabaseServiceRole },
 }) => {
+
+  console.log("---------------- CREATING CHECKOUT SESSION")
+
+  
   const session = await getSession()
   if (!session) {
     throw redirect(303, "/login")
@@ -32,6 +36,9 @@ export const load: PageServerLoad = async ({
       message: "Unknown error. If issue persists, please contact us.",
     })
   }
+  
+
+
 
   const { primarySubscription } = await fetchSubscription({
     customerId,
@@ -45,6 +52,7 @@ export const load: PageServerLoad = async ({
 
   let checkoutUrl
   try {
+    console.log("---------------- CREATED CHECKOUT SESSION")
     const stripeSession = await stripe.checkout.sessions.create({
       line_items: [
         {
@@ -57,6 +65,8 @@ export const load: PageServerLoad = async ({
       success_url: `${url.origin}/account`,
       cancel_url: `${url.origin}/account/billing`,
     })
+
+    // console.log("STRIPE SESSION",stripeSession)
     checkoutUrl = stripeSession.url
   } catch (e) {
     throw error(

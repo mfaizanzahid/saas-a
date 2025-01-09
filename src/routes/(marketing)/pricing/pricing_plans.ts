@@ -1,4 +1,7 @@
-export const defaultPlanId = "free"
+export const defaultPlanId = 1
+
+
+
 
 export const pricingPlans = [
   {
@@ -29,7 +32,7 @@ export const pricingPlans = [
     id: "enterprise",
     name: "Premium Plan",
     description:
-      "AAA plan to test the upgrade expereince. Try buying this with the test credit card 4242424242424242.",
+      "A plan to test the upgrade expereince. Try buying this with the test credit card 4242424242424242.",
     price: "$30",
     priceIntervalName: "per month",
     stripe_price_id: "price_1OlCQ3CAHU0k78s7NWy3RGEe",

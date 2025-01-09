@@ -9,7 +9,7 @@ export const getOrCreateCustomerId = async ({
 }) => {
   const { data: dbCustomer, error } = await supabaseServiceRole
     .from("stripe_customers")
-    .select("stripe_customer_id, credits, plan, price,total_credits")
+    .select("stripe_customer_id, credits, plan, price,total_credits,billing_cycle")
     .eq("user_id", session.user.id)
     .single()
 
@@ -19,6 +19,15 @@ export const getOrCreateCustomerId = async ({
   }
 
   if (dbCustomer?.stripe_customer_id) {
+
+    // if (!dbCustomer.billing_cycle) {
+    //   //fetch the subscription from stripe api
+    //   const subscription = await stripe.subscriptions.retrieve(dbCustomer.stripe_customer_id)
+    //   dbCustomer.billing_cycle = subscription.billing_cycle_anchor
+    // }
+
+      
+
     return { customerId: dbCustomer.stripe_customer_id, customerCredits: dbCustomer.credits, totalCredits: dbCustomer.total_credits, customerPlan: dbCustomer.plan, customerPrice: dbCustomer.price }
   }
 
@@ -51,6 +60,12 @@ export const getOrCreateCustomerId = async ({
   if (!customer.id) {
     return { error: "Unknown stripe user creation error" }
   }
+
+
+
+
+
+
 let basicPlan = "Basic Plan"
 
   //In supabase table "plans" find the plan named Basic Plan and get the credits and price for it
@@ -77,9 +92,13 @@ let basicPlan = "Basic Plan"
       stripe_customer_id: customer.id,
       updated_at: new Date(),
       activated_at: new Date(),
+      activated_day: new Date().getDate(),
       credits: credits,
+      total_credits: credits,
       price: price,
       plan: basicPlan,
+      billing_cycle: "month",
+      email: session.user.email,
     })
 
   if (insertError) {
@@ -94,6 +113,7 @@ export const fetchSubscription = async ({
   userId,
   customerId,
 }) => {
+  console.log("----------FETCH SUBSCRIPTION", userId, customerId)
   // Fetch user's subscriptions
   let stripeSubscriptions
   try {
@@ -137,9 +157,10 @@ export const fetchSubscription = async ({
   }
 
   let hasEverHadSubscription = stripeSubscriptions.data.length > 0
-
+  // console.log("PRIMARY SUBSCRIPTION", primarySubscription)
   return {
     primarySubscription,
+   
     hasEverHadSubscription,
   }
 }

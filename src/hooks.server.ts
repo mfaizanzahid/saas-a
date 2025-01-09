@@ -7,6 +7,13 @@ import { PRIVATE_SUPABASE_SERVICE_ROLE } from "$env/static/private"
 import { createSupabaseServerClient } from "@supabase/auth-helpers-sveltekit"
 import { createClient } from "@supabase/supabase-js"
 import type { Handle } from "@sveltejs/kit"
+import './lib/server/cron.js' // Import to start the cron job
+
+export const supabaseServiceRoleCron = createClient(
+  PUBLIC_SUPABASE_URL,
+  PRIVATE_SUPABASE_SERVICE_ROLE,
+  { auth: { persistSession: false } }
+)
 
 export const handle: Handle = async ({ event, resolve }) => {
   event.locals.supabase = createSupabaseServerClient({

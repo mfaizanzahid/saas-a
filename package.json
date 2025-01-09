@@ -41,6 +41,7 @@
 		"@supabase/supabase-js": "^2.33.0",
 		"lodash": "^4.17.21",
 		"lodash-es": "^4.17.21",
+		"node-cron": "^3.0.3",
 		"stripe": "^13.3.0",
 		"svelte-simple-modal": "^1.6.2"
 	}
