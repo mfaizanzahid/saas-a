@@ -31,6 +31,7 @@ export const load: PageServerLoad = async ({
     customerId,
     supabaseServiceRole,
     userId: session.user.id,
+    userEmail: session.user.email,
     
   })
   if (fetchErr) {

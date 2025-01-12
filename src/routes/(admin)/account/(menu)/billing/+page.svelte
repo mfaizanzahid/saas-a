@@ -4,7 +4,7 @@
   import SettingsModule from "../settings/settings_module.svelte"
   import PricingModule from "../../../../(marketing)/pricing/pricing_module.svelte"
   import {
-    pricingPlans,
+    // pricingPlans,
     defaultPlanId,
   } from "../../../../(marketing)/pricing/pricing_plans"
 
@@ -31,6 +31,22 @@
 </h1>
 
 {#if !data.isActiveCustomer}
+  <SettingsModule
+    {data}
+    title="Subscription"
+    editable={false}
+    fields={[
+      { id: "plan", label: "Current Plan", initialValue: currentPlanName },
+      {
+        id: "credits",
+        label: "Remaining Credits",
+        initialValue: data.customerCredits,
+      },
+    ]}
+    editButtonTitle="Manage Subscripton"
+    editLink="/account/billing/manage"
+  />
+
   <div class="mt-12">
     <PricingModule {currentPlanId} callToAction="Select Plan" center={false} />
   </div>

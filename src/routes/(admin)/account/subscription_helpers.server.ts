@@ -9,7 +9,7 @@ export const getOrCreateCustomerId = async ({
 }) => {
   const { data: dbCustomer, error } = await supabaseServiceRole
     .from("stripe_customers")
-    .select("stripe_customer_id, credits, plan, price,total_credits,billing_cycle")
+    .select("*")
     .eq("user_id", session.user.id)
     .single()
 
@@ -19,7 +19,7 @@ export const getOrCreateCustomerId = async ({
   }
 
   if (dbCustomer?.stripe_customer_id) {
-
+console.log("FOUND CUSTOMER ID IN SUPABASE", dbCustomer.stripe_customer_id)
     // if (!dbCustomer.billing_cycle) {
     //   //fetch the subscription from stripe api
     //   const subscription = await stripe.subscriptions.retrieve(dbCustomer.stripe_customer_id)
@@ -28,9 +28,9 @@ export const getOrCreateCustomerId = async ({
 
       
 
-    return { customerId: dbCustomer.stripe_customer_id, customerCredits: dbCustomer.credits, totalCredits: dbCustomer.total_credits, customerPlan: dbCustomer.plan, customerPrice: dbCustomer.price }
+    return { customerId: dbCustomer.stripe_customer_id, customerCredits: dbCustomer.credits, totalCredits: dbCustomer.total_credits, customerPlan: dbCustomer.plan, customerPrice: dbCustomer.price, customerPlanId:dbCustomer.plan_id }
   }
-
+console.log("NO CUSTOMER ID FOUND IN SUPABASE----CREATING NEW CUSTOMER IN STRIPE")
   // Fetch data needed to create customer
   let { data: profile, error: profileError } = await supabaseServiceRole
     .from("profiles")
@@ -53,6 +53,7 @@ export const getOrCreateCustomerId = async ({
         website: profile.data?.website ?? "",
       },
     })
+    console.log("CREATED CUSTOMER IN STRIPE", customer.id)
   } catch (e) {
     return { error: e }
   }
@@ -66,21 +67,24 @@ export const getOrCreateCustomerId = async ({
 
 
 
-let basicPlan = "Basic Plan"
 
-  //In supabase table "plans" find the plan named Basic Plan and get the credits and price for it
+
+  //In supabase table "plans" find the free plan with id 1 and get the credits and price for it
   const { data: plan, error: planError } = await supabaseServiceRole
     .from("plans")
-    .select("credits, price")
-    .eq("name", basicPlan)
+    .select("*")
+    .eq("id", 1)
     .single()
   if (planError) {
     return { error: planError }
   }
 
-  //set variables for the credits and price of the Basic Plan
+  //set variables for the credits and price of the free plan
   const credits = plan.credits
   const price = plan.price
+  const planId = plan.id
+  const planName = plan.name 
+  const billingCycle = plan.billing_cycle
 
 
 
@@ -96,9 +100,10 @@ let basicPlan = "Basic Plan"
       credits: credits,
       total_credits: credits,
       price: price,
-      plan: basicPlan,
-      billing_cycle: "month",
+      billing_cycle: billingCycle,
       email: session.user.email,
+      plan_id: planId,
+      plan: planName,
     })
 
   if (insertError) {
@@ -110,9 +115,36 @@ let basicPlan = "Basic Plan"
 
 export const fetchSubscription = async ({
   supabaseServiceRole,
+  userEmail,
   userId,
   customerId,
 }) => {
+
+  //fetch customer email from stripe 
+  const customer = await stripe.customers.retrieve(customerId)
+  const stripeEmail = customer.email
+  console.log("CURRENT SESSION EMAIL ADDRESS", userEmail, "CURRENT STRIPE EMAIL ADDRESS", stripeEmail)
+  
+  //if email does not equal to user session email then update customer email in stripe
+  if(stripeEmail !== userEmail){
+    console.log("UPDATING CUSTOMER EMAIL IN STRIPE")
+    const updatedCustomer = await stripe.customers.update(customerId, {
+      email: userEmail,
+    })
+    console.log("UPDATED CUSTOMER EMAIL IN STRIPE", updatedCustomer.email)
+    //update email in stripe_customers table in supabase for this user with stripe_customer_id equal to customerId
+    console.log("UPDATING CUSTOMER EMAIL IN SUPABASE")
+    const { data:customer, error:updateError } = await supabaseServiceRole
+      .from("stripe_customers")
+      .update({ email: userEmail })
+      .eq("stripe_customer_id", customerId)
+      console.log("UPDATED CUSTOMER EMAIL IN SUPABASE", customer.email)
+    
+  }
+
+
+
+
   console.log("----------FETCH SUBSCRIPTION", userId, customerId)
   // Fetch user's subscriptions
   let stripeSubscriptions

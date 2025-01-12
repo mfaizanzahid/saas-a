@@ -3,13 +3,19 @@
   import type { Writable } from "svelte/store"
   import { onMount } from "svelte"
   import { writable } from "svelte/store"
-  import { createClient } from "@supabase/supabase-js"
+  // import { createClient } from "@supabase/supabase-js"
   import { debounce } from "lodash"
 
-  import { PUBLIC_SUPABASE_URL } from "$env/static/public"
-  import { PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public"
+  // import { PUBLIC_SUPABASE_URL } from "$env/static/public"
+  // import { PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public"
 
-  const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY)
+  // const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY)
+
+  export let data
+  let customerCredits = data.customerCredits
+  let totalCredits = data.totalCredits
+  let customerPlanId = data.customerPlanId
+  let customerPlan = data.customerPlan
 
   let adminSection: Writable<String> = getContext("adminSection")
   adminSection.set("create")
@@ -18,6 +24,7 @@
     businessDescription: "",
     targetAudience: "",
     wordCount: "50 words",
+
     objective: "",
     numEmails: 4,
     isBreakupEmail: false,
@@ -758,6 +765,10 @@
     fetchCopyTypes()
   })
 </script>
+
+<svelte:head>
+  <title>Create</title>
+</svelte:head>
 
 <div>
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}

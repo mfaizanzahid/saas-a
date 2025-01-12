@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ depends, locals: { getSession, supa
     throw redirect(303, "/login")
   }
 
-  let { error: idError, customerId, customerCredits, totalCredits, customerPlan, customerPrice } = await getOrCreateCustomerId({
+  let { error: idError, customerId, customerCredits, totalCredits, customerPlan, customerPrice,customerPlanId } = await getOrCreateCustomerId({
     supabaseServiceRole,
     session,
   })
@@ -24,9 +24,11 @@ export const load: PageServerLoad = async ({ depends, locals: { getSession, supa
   }
 
   return {
- totalCredits,
+    customerId,
+    totalCredits,
     customerCredits,
     customerPlan,
     customerPrice,
+    customerPlanId,
   }
 }

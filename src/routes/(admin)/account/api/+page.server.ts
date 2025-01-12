@@ -47,7 +47,6 @@ export const actions = {
       email,
     }
   },
-/*************  ✨ Codeium Command ⭐  *************/
 /**
  * Handles user password update requests.
  * 
@@ -67,7 +66,6 @@ export const actions = {
  * @returns {Object} Contains the updated password fields if successful.
  */
 
-/******  1aa7c55d-6c77-4e7f-8943-858353a177d3  *******/
   updatePassword: async ({ request, locals: { supabase, getSession } }) => {
     const session = await getSession()
     if (!session) {

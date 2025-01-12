@@ -21,7 +21,7 @@ function getDynamicResetDate(activatedAt, billingCycle, today) {
 
         return new Date(Date.UTC(todayYear, todayMonth, validDay));
 
-        
+
     } else if (billingCycle === 'year') {
         // Yearly billing logic
         const nextYear = todayYear + 1;
@@ -29,7 +29,7 @@ function getDynamicResetDate(activatedAt, billingCycle, today) {
         const lastDayOfActivationMonthNextYear = new Date(firstDayOfActivationMonthNextYear - 1).getDate();
         const validDay = Math.min(activationDay, lastDayOfActivationMonthNextYear);
 
-        return  new Date(Date.UTC(todayYear, activationMonth, validDay));
+        return new Date(Date.UTC(todayYear, activationMonth, validDay));
     }
 }
 
@@ -40,9 +40,9 @@ export async function resetCredits() {
 
     const today = new Date();
     const todayDate = today.getDate(); // Today's day of the month
-    
-    
-    console.log("TODAY",today)
+
+
+    console.log("TODAY", today)
 
 
     // Fetch customers whose activated_day is less than or equal to today's date
@@ -57,33 +57,34 @@ export async function resetCredits() {
         console.error('Error fetching customers:', error);
         return { success: false, error: error.message };
     }
-// console.log("CUSTOMERS",customers)
+    // console.log("CUSTOMERS",customers)
     for (const customer of customers) {
         const billingCycle = customer.billing_cycle
         const activatedAt = customer.activated_at
         const customerPlan = customer.plan
+        const customerPlanId = customer.plan_id
 
-console.log("BILLING CYCLE",billingCycle)
-console.log("ACTIVATED AT",activatedAt)
+        console.log("BILLING CYCLE", billingCycle)
+        console.log("ACTIVATED AT", activatedAt)
 
-        if (billingCycle === 'month' && customerPlan === 'Basic Plan') {
+        if (billingCycle === 'month' && customerPlanId === 1) {
 
             const resetDate = getDynamicResetDate(activatedAt, 'month', today);
-            console.log("MONTHLY RESET DATE",resetDate)
+            console.log("MONTHLY RESET DATE", resetDate)
             if (resetDate.toDateString() === today.toDateString()) {
                 // const newCredits = customer.plan === 'Basic Plan' ? customer.total_credits : 0;
                 // console.log("NEW CREDITS",newCredits)
 
 
                 // Reset credits for monthly BASIC customers
-                const { data:reset, error: updateError } = await supabaseServiceRoleCron
+                const { data: reset, error: updateError } = await supabaseServiceRoleCron
                     .from('stripe_customers')
                     .update({
                         credits: customer.total_credits,
                     })
                     .eq('user_id', customer.user_id);
 
-                    console.log("RESET DATA",reset)
+                console.log("RESET DATA", reset)
 
                 if (updateError) {
                     console.error(`Error resetting credits for customer ${customer.user_id} (monthly):`, updateError);
@@ -94,18 +95,18 @@ console.log("ACTIVATED AT",activatedAt)
         } else if (billingCycle === 'year') {
             // Reset monthly credits for yearly customers
             const monthlyResetDate = getDynamicResetDate(activatedAt, 'month', today);
-            console.log("MONTHLY RESET DATE",monthlyResetDate)
+            console.log("MONTHLY RESET DATE", monthlyResetDate)
 
             if (monthlyResetDate.toDateString() === today.toDateString()) {
-                
-                const { data:reset, error: monthlyUpdateError } = await supabaseServiceRoleCron
+
+                const { data: reset, error: monthlyUpdateError } = await supabaseServiceRoleCron
                     .from('stripe_customers')
                     .update({
                         credits: customer.total_credits, // Reset to total credits monthly
                     })
                     .eq('user_id', customer.user_id);
 
-                    console.log("RESET DATA",reset)
+                console.log("RESET DATA", reset)
 
                 if (monthlyUpdateError) {
                     console.error(`Error resetting monthly credits for customer ${customer.user_id} (yearly):`, monthlyUpdateError);
@@ -172,8 +173,8 @@ console.log("ACTIVATED AT",activatedAt)
 //     // Update credits and renewal_date for each customer
 //     for (const customer of customers) {
 //         const newCredits = customer.plan === 'Basic Plan' ? 25 : 0; // Determine new credits
-//         // const newRenewalDate = customer.plan === 'Basic Plan' 
-//         //     ? new Date(new Date().setDate(new Date().getDate() + 29)).toISOString().split('T')[0] 
+//         // const newRenewalDate = customer.plan === 'Basic Plan'
+//         //     ? new Date(new Date().setDate(new Date().getDate() + 29)).toISOString().split('T')[0]
 //         //     : customer.renewal_date; // Update renewal date if Basic Plan
 //         const newRenewalDate = new Date(new Date().setDate(new Date().getDate() + 29)).toISOString().split('T')[0]
 
