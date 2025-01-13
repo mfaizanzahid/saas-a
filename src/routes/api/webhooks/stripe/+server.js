@@ -12,7 +12,6 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
         const event = stripe.webhooks.constructEvent(
             payload,
             sig,
-            // 'whsec_lMaIzq9SdUk2OnZqDUqy2BLN823Hw4yQ'
             STRIPE_WEBHOOK_SECRET
         );
         // console.log("STRIPE EVENT")
