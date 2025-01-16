@@ -35,7 +35,21 @@ function getDynamicResetDate(activatedAt, billingCycle, today) {
 
 export async function resetCredits() {
 
+    let logMessage
+
     console.log('Running resetCredits...')
+
+
+    //add to system_logs table in supabase with message as event_data and event_type as 'resetCredits'
+
+    const { data: logData, error: logError } = await supabaseServiceRoleCron
+        .from('system_logs')
+        .insert([
+            {
+                event_type: 'resetCredits',
+                event_data: 'Running resetCredits...'
+            }
+        ]);
 
 
     const today = new Date();
@@ -88,8 +102,12 @@ export async function resetCredits() {
 
                 if (updateError) {
                     console.error(`Error resetting credits for customer ${customer.user_id} (monthly):`, updateError);
+                    //set logMessage
+                    logMessage = `Error resetting credits for customer ${customer.user_id} (monthly): ${updateError}`
                 } else {
                     console.log(`Successfully reset credits for customer ${customer.user_id} (monthly).`);
+                    //set logMessage
+                    logMessage = `Successfully reset credits for customer ${customer.user_id} (monthly).`
                 }
             }
         } else if (billingCycle === 'year') {
@@ -110,8 +128,12 @@ export async function resetCredits() {
 
                 if (monthlyUpdateError) {
                     console.error(`Error resetting monthly credits for customer ${customer.user_id} (yearly):`, monthlyUpdateError);
+                    //set logMessage
+                    logMessage = `Error resetting monthly credits for customer ${customer.user_id} (yearly): ${monthlyUpdateError}`
                 } else {
                     console.log(`Successfully reset monthly credits for customer ${customer.user_id} (yearly).`);
+                    //set logMessage
+                    logMessage = `Successfully reset monthly credits for customer ${customer.user_id} (yearly).`
                 }
             }
 
@@ -139,6 +161,17 @@ export async function resetCredits() {
 
         }
     }
+
+    //add to system_logs table in supabase with message as logMessage and event_type as 'resetCredits'
+    const { data: logData2, error: logError2 } = await supabaseServiceRoleCron
+        .from('system_logs')
+        .insert([
+            {
+                event_type: 'resetCredits',
+                event_data: logMessage
+            }
+        ])
+
 
     return { success: true };
 }

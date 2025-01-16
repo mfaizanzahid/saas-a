@@ -5,6 +5,7 @@ const stripe = new Stripe(PRIVATE_STRIPE_API_KEY, { apiVersion: "2023-08-16" })
 
 
 export async function POST({ request, locals: { supabaseServiceRole } }) {
+    let logMessage
     const payload = await request.text();
     const sig = request.headers.get('stripe-signature');
     // console.log("PAYLOAD STRIPE")
@@ -15,6 +16,17 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
             STRIPE_WEBHOOK_SECRET
         );
         // console.log("STRIPE EVENT")
+
+
+        //add log to system_logs table in supabase with message as event_data and event_type as event.type
+        const { data: logData, error: logError } = await supabaseServiceRole
+            .from('system_logs')
+            .insert([
+                {
+                    event_type: event.type,
+                    event_data: JSON.stringify(event)
+                }
+            ]);
 
 
         // Handle the event type Invoice Payment Succeeded For Subscription Cycle --------------------------------------
@@ -71,8 +83,12 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
 
             if (error) {
                 console.error('Error updating user credits:', error);
+                // set logMessage
+                logMessage = `WEBHOOK EVENT INVOICE PAYMENT SUCCEEDED FOR SUBSCRIPTION CYCLE - Error updating user credits: ${error}`
                 return json({ error: 'Failed to update user credits' }, { status: 500 });
             }
+            //set logMessage
+            logMessage = `WEBHOOK EVENT INVOICE PAYMENT SUCCEEDED FOR SUBSCRIPTION CYCLE - User credits reset successfully.`
 
             console.log('User credits reset successfully.');
         }
@@ -95,9 +111,13 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
                 .eq('stripe_customer_id', customerId); // Match the Stripe customer ID
 
             if (error) {
+                //set logMessage
+                logMessage = `WEBHOOK EVENT INVOICE PAYMENT FAILED FOR SUBSCRIPTION CYCLE - Error updating user credits: ${error}`
                 console.error('Error updating user credits:', error);
                 return json({ error: 'Failed to update user credits' }, { status: 500 });
             }
+            //set logMessage
+            logMessage = `WEBHOOK EVENT INVOICE PAYMENT FAILED FOR SUBSCRIPTION CYCLE - User credits reset to ZERO successfully.`
 
             console.log('User credits reset to ZERO successfully.');
         }
@@ -140,9 +160,14 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
                 .eq('stripe_customer_id', customerId); // Match the Stripe customer ID
 
             if (error) {
+                //set logMessage
+                logMessage = `WEBHOOK EVENT CUSTOMER SUBSCRIPTION DELETED - Error updating user plan: ${error}`
+
                 console.error('Error updating user credits:', error);
                 return json({ error: 'Failed to update user credits' }, { status: 500 });
             }
+            //set logMessage
+            logMessage = `WEBHOOK EVENT CUSTOMER SUBSCRIPTION DELETED - User reset to FREE PLAN.`
 
             console.log('User credits reset to ZERO successfully.');
         }
@@ -200,9 +225,14 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
                 .eq('stripe_customer_id', customerId); // Match the Stripe customer ID
 
             if (error) {
+                //set logMessage
+                logMessage = `WEBHOOK EVENT NEW SUBSCRIPTION CREATED - Error updating user plan: ${error}`
+
                 console.error('Error updating user credits:', error);
                 return json({ error: 'Failed to update user credits' }, { status: 500 });
             }
+            //set logMessage
+            logMessage = `WEBHOOK EVENT NEW SUBSCRIPTION CREATED - User Subscription Updated.`
 
             console.log('User Subscription Updated successfully.');
         }
@@ -254,13 +284,27 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
                 .eq('stripe_customer_id', customerId); // Match the Stripe customer ID
 
             if (error) {
+                //set logMessage
+                logMessage = `WEBHOOK EVENT NEW SUBSCRIPTION UPDATED - Error updating user plan: ${error}`
+
                 console.error('Error updating user credits:', error);
                 return json({ error: 'Failed to update user credits' }, { status: 500 });
             }
+            //set logMessage
+            logMessage = `WEBHOOK EVENT NEW SUBSCRIPTION UPDATED - User Subscription Updated.`
 
             console.log('User Subscription Updated successfully.');
         }
 
+        //add to system_logs table in supabase with message as logMessage and event_type as 'webhookEvent'
+        const { data: logData2, error: logError2 } = await supabaseServiceRole
+            .from('system_logs')
+            .insert([
+                {
+                    event_type: event.type,
+                    event_data: logMessage
+                }
+            ]);
 
 
         return json({ received: true });
