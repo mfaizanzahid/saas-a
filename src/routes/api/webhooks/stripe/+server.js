@@ -191,7 +191,7 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
             // const planId = subscription.items.data[0].plan.product
             // const priceId = subscription.items.data[0].plan.id
 
-            const planId = subscription.plan.product
+            // const planId = subscription.plan.product
             const priceId = subscription.plan.id
             // console.log("PLAN ID",planId)
             // console.log("PRICE ID",priceId)
@@ -251,7 +251,7 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
             const customerId = subscription.customer;
             console.log("STRIPE CUSTOMER ID", customerId)
 
-            const planId = subscription.plan.product
+            // const planId = subscription.plan.product
             const priceId = subscription.plan.id
             // console.log("PLAN ID",planId)
             // console.log("PRICE ID",priceId)
