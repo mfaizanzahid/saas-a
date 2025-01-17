@@ -35,7 +35,8 @@ function getDynamicResetDate(activatedAt, billingCycle, today) {
 
 export async function resetCredits() {
 
-    let logMessage
+    let logMessages = []
+
 
     console.log('Running resetCredits...')
 
@@ -102,12 +103,19 @@ export async function resetCredits() {
 
                 if (updateError) {
                     console.error(`Error resetting credits for customer ${customer.user_id} (monthly):`, updateError);
-                    //set logMessage
-                    logMessage = `Error resetting credits for customer ${customer.user_id} (monthly): ${updateError}`
+
+                    //add to logMessages
+                    logMessages.push(`Error resetting credits for customer ${customer.user_id} (monthly): ${updateError}`)
+
+
+
                 } else {
                     console.log(`Successfully reset credits for customer ${customer.user_id} (monthly).`);
-                    //set logMessage
-                    logMessage = `Successfully reset credits for customer ${customer.user_id} (monthly).`
+                    //add to logMessages
+                    logMessages.push(`Successfully reset credits for customer ${customer.user_id} (monthly).`)
+
+                    // //set logMessage
+                    // logMessage = `Successfully reset credits for customer ${customer.user_id} (monthly).`
                 }
             }
         } else if (billingCycle === 'year') {
@@ -128,12 +136,17 @@ export async function resetCredits() {
 
                 if (monthlyUpdateError) {
                     console.error(`Error resetting monthly credits for customer ${customer.user_id} (yearly):`, monthlyUpdateError);
-                    //set logMessage
-                    logMessage = `Error resetting monthly credits for customer ${customer.user_id} (yearly): ${monthlyUpdateError}`
+                    // //set logMessage
+                    // logMessage = `Error resetting monthly credits for customer ${customer.user_id} (yearly): ${monthlyUpdateError}`
+                    //add to logMessages
+                    logMessages.push(`Error resetting monthly credits for customer ${customer.user_id} (yearly): ${monthlyUpdateError}`)
                 } else {
                     console.log(`Successfully reset monthly credits for customer ${customer.user_id} (yearly).`);
-                    //set logMessage
-                    logMessage = `Successfully reset monthly credits for customer ${customer.user_id} (yearly).`
+                    //add to logMessages
+                    logMessages.push(`Successfully reset monthly credits for customer ${customer.user_id} (yearly).`)
+
+                    // //set logMessage
+                    // logMessage = `Successfully reset monthly credits for customer ${customer.user_id} (yearly).`
                 }
             }
 
@@ -168,7 +181,7 @@ export async function resetCredits() {
         .insert([
             {
                 event_type: 'resetCredits',
-                event_data: logMessage
+                event_data: logMessages.length > 0 ? logMessages : "No credits reset"
             }
         ])
 

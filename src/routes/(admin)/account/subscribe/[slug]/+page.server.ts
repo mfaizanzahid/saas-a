@@ -44,6 +44,8 @@ export const load: PageServerLoad = async ({
     customerId,
     supabaseServiceRole,
     userId: session.user.id,
+    userEmail: session.user.email,
+    
   })
   if (primarySubscription) {
     // User already has plan, we shouldn't let them buy another
