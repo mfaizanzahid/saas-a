@@ -653,7 +653,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         currentEmailId = currentEmailData[0]?.id;
         currentPrompt = currentEmailData[0]?.prompt;
         console.log("CURRENT EMAIL ID---",currentEmailId);
-        console.log("CURRENT EMAIL PROMPT---",currentPrompt);
+        // console.log("CURRENT EMAIL PROMPT---",currentPrompt);
         if (currentEmailError) {
           console.error('Error fetching current email:', currentEmailError);
           throw new Error('Error fetching current email');
@@ -691,7 +691,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
     
         
     
-        return { currentEmail, previousEmailId, nextEmailId,currentEmailId,currentPrompt };
+        return { currentEmail, previousEmailId, nextEmailId,currentEmailId};
       } catch (error) {
         console.error('Error fetching emails', error);
         throw new Error('Error fetching emails');

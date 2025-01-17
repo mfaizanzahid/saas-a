@@ -1,2 +1,11 @@
+name = "writepro"
+compatibility_date = "2024-01-17"
+workers_dev = true
+
+main = "./src/worker.ts"
+
 [triggers]
-crons = ["*/2 * * * *"] # Adjust this schedule as needed
+crons = ["*/2 * * * *"]
+
+[build]
+command = "npm run build"

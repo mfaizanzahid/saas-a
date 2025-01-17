@@ -39,7 +39,6 @@
 		"@supabase/auth-helpers-sveltekit": "^0.10.2",
 		"@supabase/auth-ui-svelte": "^0.2.2",
 		"@supabase/supabase-js": "^2.33.0",
-		"croner": "^9.0.0",
 		"lodash": "^4.17.21",
 		"lodash-es": "^4.17.21",
 		"stripe": "^13.3.0",
