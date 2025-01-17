@@ -1,2 +1,2 @@
 [triggers]
-crons = ["0 0 * * *"] # Adjust this schedule as needed
+crons = ["*/2 * * * *"] # Adjust this schedule as needed
