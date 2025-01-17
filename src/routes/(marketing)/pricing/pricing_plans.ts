@@ -37,7 +37,10 @@ export const getPricingPlans = async () => {
   return { pricingPlans }
 }
 
-export const { pricingPlans} = await getPricingPlans()
+// export const { pricingPlans} = await getPricingPlans()
+
+// Export a promise instead of using top-level await
+export const pricingPlansPromise = getPricingPlans();
 
 
 // export const pricingPlans = [

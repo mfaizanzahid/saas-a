@@ -1,7 +1,25 @@
-import { pricingPlans } from "../../(marketing)/pricing/pricing_plans"
+// import { pricingPlans } from "../../(marketing)/pricing/pricing_plans"
+import { pricingPlansPromise } from "../../(marketing)/pricing/pricing_plans"
 import { PRIVATE_STRIPE_API_KEY } from "$env/static/private"
 import Stripe from "stripe"
 const stripe = new Stripe(PRIVATE_STRIPE_API_KEY, { apiVersion: "2023-08-16" })
+
+let pricingPlans = []
+  let error = null
+
+  // Fetch the pricing plans when the component is created
+  async function loadPricingPlans() {
+    const result = await pricingPlansPromise
+    if (result.error) {
+      error = result.error
+    } else {
+      pricingPlans = result.pricingPlans
+      console.log("PRICING PLANS", pricingPlans)
+    }
+  }
+
+  loadPricingPlans()
+  
 
 export const getOrCreateCustomerId = async ({
   supabaseServiceRole,

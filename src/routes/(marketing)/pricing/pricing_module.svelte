@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { pricingPlans } from "./pricing_plans"
+  // import { pricingPlans } from "./pricing_plans"
+  import { pricingPlansPromise } from "./pricing_plans"
 
   // Module context
-  export let highlightedPlanId: string = ""
+  export const highlightedPlanId: string = ""
   export let callToAction: string
   export let currentPlanId: string = ""
   export let center = true
@@ -14,6 +15,22 @@
   function toggleBillingCycle() {
     billingCycle = billingCycle === "month" ? "year" : "month"
   }
+
+  let pricingPlans = []
+  let error = null
+
+  // Fetch the pricing plans when the component is created
+  async function loadPricingPlans() {
+    const result = await pricingPlansPromise
+    if (result.error) {
+      error = result.error
+    } else {
+      pricingPlans = result.pricingPlans
+      console.log("PRICING PLANS", pricingPlans)
+    }
+  }
+
+  loadPricingPlans()
 </script>
 
 <div
