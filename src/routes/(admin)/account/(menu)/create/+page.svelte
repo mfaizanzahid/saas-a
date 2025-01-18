@@ -399,6 +399,8 @@
       emailToRewrite: formData.emailToRewrite,
       reply: reply,
       copyType: selectedCopyType,
+      copyTemplate: selectedCopyTemplate,
+      copyTemplateId: selectedCopyTemplateId,
       previousEmailId: previousEmailId,
       isRegenerate: isRegenerate.toString(),
       // prompt: prompt,
@@ -1489,7 +1491,7 @@
   >
     <div class="copy-type-modal" role="document" on:click|stopPropagation>
       <p class="mt-2 mb-5 text-center text-xl font-semibold text-neutral">
-        Select Copy Type
+        What Are You Looking To Create?
       </p>
       <ul>
         {#each $copyTypes as type (type.id)}
@@ -1517,7 +1519,7 @@
   >
     <div class="copy-type-modal" role="document" on:click|stopPropagation>
       <p class="mt-2 mb-5 text-center text-xl font-semibold text-neutral">
-        Select Copy Template
+        Select A Template
       </p>
       <ul>
         {#each $copyTemplates as template (template.id)}
@@ -1697,6 +1699,7 @@
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     animation: scaleUp 0.3s ease;
+    max-width: 300px;
   }
   .main-content {
     will-change: filter;

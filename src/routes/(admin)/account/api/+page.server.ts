@@ -295,6 +295,8 @@ let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply
     const emailToRewrite = formData.get("emailToRewrite");
     const wordCount = formData.get("wordCount");
     const copyType = formData.get("copyType");
+    const copyTemplate = formData.get("copyTemplate");
+    const copyTemplateId = formData.get("copyTemplateId");
     
 
     reply = formData.get("reply") as string ?? null;
@@ -372,11 +374,11 @@ console.log("DATABASE RESULT",currentEmailData)
       };
     }
 
-     // Fetch copy type prompts
-     const { data: copyTypePromptsData, error: copyTypeError } = await supabase
-     .from('copy_types')
+     // Fetch copy template prompts
+     const { data: copyTemplatePromptsData, error: copyTypeError } = await supabase
+     .from('copy_templates')
      .select('system_prompt, first_prompt, next_prompt')
-     .eq('name', copyType)
+     .eq('id', copyTemplateId)
      .single();
 
      if (copyTypeError) {
@@ -384,9 +386,9 @@ console.log("DATABASE RESULT",currentEmailData)
        throw new Error('Error fetching copy type prompts')
      }
 
-     modelInstructions = copyTypePromptsData.system_prompt
-     firstPrompt = copyTypePromptsData.first_prompt.replace("${wordCount}", wordCount)
-     nextPrompt = copyTypePromptsData.next_prompt.replace("${currentEmailIndex}", currentEmailIndex).replace("${wordCount}", wordCount).replace("${steps}", steps)
+     modelInstructions = copyTemplatePromptsData.system_prompt
+     firstPrompt = copyTemplatePromptsData.first_prompt.replace("${wordCount}", wordCount)
+     nextPrompt = copyTemplatePromptsData.next_prompt.replace("${currentEmailIndex}", currentEmailIndex).replace("${wordCount}", wordCount).replace("${steps}", steps)
 
   
 
@@ -510,6 +512,8 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
               steps:steps,
               word_count: wordCount,
               copy_type:copyType,
+              copy_template:copyTemplate,
+              copy_template_id:copyTemplateId,
               ...(newEmailSequenceId ? { id: newEmailSequenceId } : {}),
               // created_at: new Date(),
             },
