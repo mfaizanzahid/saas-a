@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { PRIVATE_STRIPE_API_KEY, STRIPE_WEBHOOK_SECRET } from "$env/static/private"
+import { PRIVATE_STRIPE_API_KEY, PRIVATE_STRIPE_WEBHOOK_SECRET } from "$env/static/private"
 import Stripe from "stripe"
 const stripe = new Stripe(PRIVATE_STRIPE_API_KEY, { apiVersion: "2023-08-16" })
 
@@ -13,7 +13,7 @@ export async function POST({ request, locals: { supabaseServiceRole } }) {
         const event = stripe.webhooks.constructEvent(
             payload,
             sig,
-            STRIPE_WEBHOOK_SECRET
+            PRIVATE_STRIPE_WEBHOOK_SECRET
         );
         // console.log("STRIPE EVENT")
 
