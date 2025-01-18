@@ -823,6 +823,54 @@ console.log("SEARCH TERM",searchTerm)
     
   },
 
+
+  fetchCopyTemplates: async ({  request, locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+    const formData = await request.formData()
+   
+    const copyTypeId = formData.get('copyTypeId');
+    console.log("COPY TYPE ID",copyTypeId)
+
+// console.log("FETCHING COPY TYPES")
+    try {
+      // Fetch email sequences for the logged-in user
+      const { data: copyTemplates, error } = await supabase
+      .from('copy_templates')
+      .select('id, name')
+      .eq('copy_type_id', copyTypeId);
+        console.log("FETCHED COPY TEMPLATES",copyTemplates)
+        
+      if (error) {
+        console.error('Error fetching copy templates', error);
+        throw new Error('Error fetching copy templates');
+      }
+
+      return {
+       
+        body: JSON.stringify(copyTemplates)
+      };
+      
+    } catch (error) {
+      console.error('Error fetching copy types:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error fetching copy types' },
+      };
+    }
+
+    
+  },
+
+
  
   saveSequenceName: async ({ request, locals: { supabase, getSession } }) => {
     const session = await getSession();

@@ -44,7 +44,7 @@
       },
     ]}
     editButtonTitle="Manage Subscripton"
-    editLink="/account/billing/manage"
+    editLink="#"
   />
 
   <div class="mt-12">

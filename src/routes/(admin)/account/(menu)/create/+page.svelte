@@ -93,6 +93,7 @@
   let isCopyTypeModalOpen = false
   let copyTypes = writable([])
   let selectedCopyType = null
+
   let isLoadingNewSequences = false
   let isLoadingSequences = true
   let hasMoreRecords = true // Tracks if there are more records to load
@@ -122,6 +123,61 @@
   let isStepDelete = false
   let isStepModalOpen = false
   let deleteConfirm
+
+  let copyTemplates = writable([])
+  let selectedCopyTypeId = null
+  let selectedCopyTemplate = null
+  let selectedCopyTemplateId = null
+  let isCopyTemplateModalOpen = false
+
+  async function fetchCopyTemplates(copyTypeId) {
+    const formDataString = `copyTypeId=${copyTypeId}`
+    const response = await fetch("/account/api?/fetchCopyTemplates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+    if (response.ok) {
+      const result = await response.json()
+      const jsonCopyTemplateData = JSON.parse(result.data)
+      const jsonCopyTemplateDataC = JSON.parse(jsonCopyTemplateData[1])
+
+      console.log("JSON C", jsonCopyTemplateDataC)
+      copyTemplates.set(jsonCopyTemplateDataC)
+      console.log("COPY TEMPLATES", $copyTemplates)
+    } else {
+      console.error("Failed to fetch copy templates")
+    }
+  }
+
+  function handleCopyTypeSelection(type) {
+    copyTemplates.set([])
+    selectedCopyType = type.name
+    selectedCopyTypeId = type.id
+    fetchCopyTemplates(selectedCopyTypeId)
+    isCopyTypeModalOpen = false
+    isCopyTemplateModalOpen = true
+  }
+
+  function handleCopyTemplateSelection(template) {
+    selectedCopyTemplate = template.name
+    selectedCopyTemplateId = template.id
+    isCopyTemplateModalOpen = false
+
+    showForm.set(true)
+
+    console.log("SELECTED COPY TEMPLATE", template)
+  }
+
+  function closeCopyTemplateModal() {
+    isCopyTemplateModalOpen = false
+  }
+
+  function closeCopyTypeModal() {
+    isCopyTypeModalOpen = false
+  }
 
   function openRenameModal(sequence) {
     currentSequence = sequence
@@ -599,17 +655,6 @@
     isCopyTypeModalOpen = true
   }
 
-  function handleCopyTypeSelection(type: string) {
-    selectedCopyType = type.name
-    isCopyTypeModalOpen = false
-    showForm.set(true) // Show the form after selection
-    console.log("SELECTED COPY TYPE", selectedCopyType)
-  }
-
-  function closeCopyTypeModal() {
-    isCopyTypeModalOpen = false
-  }
-
   // Toggle selection mode
   function toggleSelection(sequenceId) {
     selectedSequences.update((selected) => {
@@ -766,6 +811,8 @@
   })
 </script>
 
+<!--CONTENT STARTS HERE------------------------------------------------------------------------------------------- -->
+
 <svelte:head>
   <title>Create</title>
 </svelte:head>
@@ -781,7 +828,8 @@
   class="main-content {isModalOpen ||
   isStepModalOpen ||
   isCopyTypeModalOpen ||
-  isDeleteModalOpen
+  isDeleteModalOpen ||
+  isCopyTemplateModalOpen
     ? 'blurred'
     : ''}"
 >
@@ -811,7 +859,7 @@
   {/if}
 
   <!-- {#if !reply && !isLoading && $showForm} -->
-  {#if !reply && !isLoading && $showForm && selectedCopyType === "Rewriter"}
+  {#if !reply && !isLoading && $showForm && selectedCopyTypeId === 1}
     <form on:submit|preventDefault={handleSubmit} class="form-container">
       <div class="form-section">
         <label
@@ -1456,6 +1504,36 @@
         {/each}
       </ul>
       <button class="btn btn-wide" on:click={closeCopyTypeModal}>Cancel</button>
+    </div>
+  </div>
+{/if}
+
+{#if isCopyTemplateModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeCopyTemplateModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <p class="mt-2 mb-5 text-center text-xl font-semibold text-neutral">
+        Select Copy Template
+      </p>
+      <ul>
+        {#each $copyTemplates as template (template.id)}
+          <li>
+            <button
+              class="btn btn-secondary btn-wide normal-case"
+              on:click={() => handleCopyTemplateSelection(template)}
+            >
+              {template.name}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <button class="btn btn-wide" on:click={closeCopyTemplateModal}
+        >Cancel</button
+      >
     </div>
   </div>
 {/if}
