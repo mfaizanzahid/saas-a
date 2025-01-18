@@ -1,5 +1,5 @@
 import { PRIVATE_CRON_SECRET } from "$env/static/private"
-import { resetCredits } from '../../../../lib/server/resetCredits.js'
+import { resetCredits } from '../../../lib/server/resetCredits.js'
 
 const AUTH_TOKEN = PRIVATE_CRON_SECRET;
 
