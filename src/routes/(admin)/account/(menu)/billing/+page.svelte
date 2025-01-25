@@ -43,8 +43,7 @@
         initialValue: data.customerCredits,
       },
     ]}
-    editButtonTitle="Manage Subscripton"
-    editLink="#"
+    hideEditButton={true}
   />
 
   <div class="mt-12">

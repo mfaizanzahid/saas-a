@@ -14,6 +14,7 @@
   // Module context
   export let editable = false
   export let dangerous = false
+  export let hideEditButton = false
   export let title: string = ""
   export let message: string = ""
   export let fields: any
@@ -119,15 +120,17 @@
           </div>
         {:else}
           <!-- !editable -->
-          <a href={editLink} class="mt-1">
-            <button
-              class="btn btn-outline btn-sm {dangerous
-                ? 'btn-error'
-                : ''} min-w-[145px]"
-            >
-              {editButtonTitle}
-            </button>
-          </a>
+          {#if !hideEditButton}
+            <a href={editLink} class="mt-1">
+              <button
+                class="btn btn-outline btn-sm {dangerous
+                  ? 'btn-error'
+                  : ''} min-w-[145px]"
+              >
+                {editButtonTitle}
+              </button>
+            </a>
+          {/if}
         {/if}
       </form>
     {:else}

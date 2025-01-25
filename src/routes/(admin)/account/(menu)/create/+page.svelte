@@ -12,70 +12,40 @@
   // const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY)
 
   export let data
-  let customerCredits = data.customerCredits
-  let totalCredits = data.totalCredits
+  // console.log("DATA", data)
   let customerPlanId = data.customerPlanId
-  let customerPlan = data.customerPlan
+
+  //set planType as Paid if customerPlanId is 2 or 5 and Premium  if 3 or 6 and Free if 1
+  let planType =
+    customerPlanId == 2 || customerPlanId == 5
+      ? "Paid"
+      : customerPlanId == 3 || customerPlanId == 6
+        ? "Premium"
+        : "Free"
+
+  // let customerCredits = data.customerCredits
+  // let totalCredits = data.totalCredits
+  // let customerPlanId = data.customerPlanId
+  // let customerPlan = data.customerPlan
 
   let adminSection: Writable<String> = getContext("adminSection")
   adminSection.set("create")
 
-  let formData = {
-    businessDescription: "",
-    targetAudience: "",
-    wordCount: "50 words",
-
-    objective: "",
-    numEmails: 4,
-    isBreakupEmail: false,
-    breakupReason: "",
-    creativity: "",
-    problemFocus: "",
-    solution: "",
-    emailToRewrite: "",
-  }
-
-  let objectives = [
-    "Problem Finding",
-    "Convincing",
-    "Selling",
-    "Awareness",
-    "Consideration",
-    "Repurchase",
-  ]
-
-  let numEmailsOptions = [1, 2, 3, 4, 5]
-
-  let wordCountOptions = [
-    "50 words",
-    "100 words",
-    "200 words",
-    "300 words",
-    "400 words",
-    "500 words",
-  ]
-
-  let breakupReasons = [
-    "Too Busy",
-    "Don't Need",
-    "Wrong Person",
-    "Redirect to Right Person",
-  ]
-
-  let creativityOptions = ["Low", "Medium", "High"]
+  let formData = {}
+  let formFields = writable([])
 
   let isLoading = false
   let reply = ""
   let currentEmailId = ""
   let currentEmailSequenceId = ""
   let currentEmailSequenceName = ""
+  let currentEmailSequenceSteps = 1
   let modelInstructions,
     prompt = "",
     nextPrompt,
     previousEmailId,
     nextEmailId,
-    loadEmailId,
-    steps
+    loadEmailId
   let currentEmailIndex = 0
   let isCopySuccessful = false
 
@@ -128,7 +98,10 @@
   let selectedCopyTypeId = null
   let selectedCopyTemplate = null
   let selectedCopyTemplateId = null
+  let selectedCopyTemplateForm = null
   let isCopyTemplateModalOpen = false
+
+  let isUpgradeModalOpen = false
 
   async function fetchCopyTemplates(copyTypeId) {
     const formDataString = `copyTypeId=${copyTypeId}`
@@ -164,6 +137,11 @@
   function handleCopyTemplateSelection(template) {
     selectedCopyTemplate = template.name
     selectedCopyTemplateId = template.id
+    selectedCopyTemplateForm = template.form_data
+    // selectedCopyTemplateForm = JSON.stringify(selectedCopyTemplateForm)
+
+    formFields.set(selectedCopyTemplateForm)
+
     isCopyTemplateModalOpen = false
 
     showForm.set(true)
@@ -347,7 +325,7 @@
   }
 
   async function handleSubmit() {
-    isLoading = true
+    // isLoading = true
 
     currentEmailIndex = 1
     currentEmailId = ""
@@ -383,25 +361,18 @@
     console.log("EMAIL ID", currentEmailId)
     console.log("EMAIL SEQ", currentEmailSequenceId)
 
-    // const formDataString = `fullPrompt=[${prompt}]&emailId=${currentEmailId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}&steps=${formData.numEmails}&wordCount=${formData.wordCount}`
+    // const formDataString = `fullPrompt=[${prompt}]&emailId=${currentEmailId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}&steps=${formData.numberOfEmails}&wordCount=${formData.wordCount}`
     const formDataString = new URLSearchParams({
       emailId: currentEmailId,
       emailSequenceId: currentEmailSequenceId,
       currentEmailIndex: currentEmailIndex.toString(),
-      steps: formData.numEmails.toString(),
-      wordCount: formData.wordCount,
-      businessDescription: formData.businessDescription,
-      targetAudience: formData.targetAudience,
-      objective: formData.objective,
-      creativity: formData.creativity,
-      problemFocus: formData.problemFocus,
-      solution: formData.solution,
-      emailToRewrite: formData.emailToRewrite,
+      json: JSON.stringify({ ...formData }),
       reply: reply,
       copyType: selectedCopyType,
       copyTemplate: selectedCopyTemplate,
       copyTemplateId: selectedCopyTemplateId,
       previousEmailId: previousEmailId,
+      // copyTemplateForm: selectedCopyTemplateForm,
       isRegenerate: isRegenerate.toString(),
       // prompt: prompt,
     }).toString()
@@ -409,7 +380,7 @@
     console.log("FORM DATA STRING", formDataString)
 
     try {
-      const response = await fetch("/account/api?/generateAnthropicReply", {
+      const response = await fetch("/account/api?/generateReply", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -423,12 +394,14 @@
         const jsonData = JSON.parse(result.data)
 
         const replyValue = jsonData[3]
+
         if (!currentEmailSequenceId) {
           currentEmailSequenceName = jsonData[4]
+          currentEmailSequenceSteps = jsonData[5]
         }
         currentEmailSequenceId =
-          jsonData.length === 7 ? jsonData[6] : jsonData[5]
-        currentEmailId = jsonData[5]
+          jsonData.length === 8 ? jsonData[7] : jsonData[6]
+        currentEmailId = jsonData[6]
 
         reply = replyValue
         // Update the reply variable with the fetched data
@@ -466,7 +439,7 @@
     isLoading = true
 
     console.log("CURRENT INDEX", currentEmailIndex)
-    console.log("STEPSSSSSSSSSS", formData.numEmails)
+    console.log("STEPSSSSSSSSSS", currentEmailSequenceSteps)
     // Convert form data to form-encoded string
     //  const formDataString = Object.entries(formData)
     //   .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
@@ -474,7 +447,7 @@
     console.log("EMAIL ID", currentEmailId)
     console.log("EMAIL SEQ", currentEmailSequenceId)
     console.log("LOADED COPY TYPE", selectedCopyType)
-    const formDataString = `emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
+    const formDataString = `selectedCopyTemplateId=${selectedCopyTemplateId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
 
     try {
       const response = await fetch("/account/api?/loadEmail", {
@@ -494,6 +467,10 @@
         previousEmailId = jsonData[4]
         nextEmailId = jsonData[5]
         currentEmailId = jsonData[6]
+        selectedCopyTemplateForm = jsonData[7]
+        //convert from array to object
+        selectedCopyTemplateForm = JSON.parse(selectedCopyTemplateForm)
+        console.log("SELECTED COPY TEMPLATE FORM", selectedCopyTemplateForm)
         // prompt = jsonData[7]
 
         reply = replyValue
@@ -514,6 +491,7 @@
       console.error("Error contacting Anthropic API:", error)
       // Handle error appropriately
     } finally {
+      formFields.set(selectedCopyTemplateForm)
       isLoading = false
     }
   }
@@ -650,6 +628,14 @@
     showForm.set(true)
   }
   async function toggleHideForm() {
+    currentEmailIndex = 0
+    currentEmailId = ""
+    currentEmailSequenceId = ""
+    reply = ""
+    previousEmailId = null
+    nextEmailId = null
+    formData = {}
+    fetchUpdatedEmailSequences()
     showForm.set(false)
   }
 
@@ -811,6 +797,19 @@
     fetchEmailSequences(currentPage)
     fetchCopyTypes()
   })
+
+  function handleOptionClick(option, field) {
+    if (option.isPremium && planType === "Free") {
+      isUpgradeModalOpen = true
+    } else {
+      formData[field.key] = option.value || option
+      field.showOptions = false
+    }
+  }
+
+  function closeUpgradeModal() {
+    isUpgradeModalOpen = false
+  }
 </script>
 
 <!--CONTENT STARTS HERE------------------------------------------------------------------------------------------- -->
@@ -831,7 +830,8 @@
   isStepModalOpen ||
   isCopyTypeModalOpen ||
   isDeleteModalOpen ||
-  isCopyTemplateModalOpen
+  isCopyTemplateModalOpen ||
+  isUpgradeModalOpen
     ? 'blurred'
     : ''}"
 >
@@ -861,173 +861,140 @@
   {/if}
 
   <!-- {#if !reply && !isLoading && $showForm} -->
-  {#if !reply && !isLoading && $showForm && selectedCopyTypeId === 1}
-    <form on:submit|preventDefault={handleSubmit} class="form-container">
-      <div class="form-section">
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="businessDescription">Describe your business:</label
-        >
-        <textarea
-          bind:value={formData.businessDescription}
-          id="businessDescription"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        ></textarea>
+  {#if !isLoading && ($showForm || reply)}
+    <div class="main-form-container">
+      <button
+        class="text-gray-700 hover:text-gray-900 py-1 px-2"
+        on:click={() => {
+          toggleHideForm()
+        }}>&larr; Back</button
+      >
+      <form
+        id="create-form"
+        on:submit|preventDefault={handleSubmit}
+        class="form-container"
+      >
+        {#each $formFields as field (field.key)}
+          <div class="form-section">
+            {#if field.type === "textarea" && !field.condition}
+              <label
+                class="block text-gray-700 text-sm font-bold mb-2"
+                for={field.key}
+              >
+                {field.label}:
+              </label>
+              <textarea
+                bind:value={formData[field.key]}
+                id={field.key}
+                class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
+                rows={field.attributes?.rows}
+                maxlength={field.attributes?.maxlength}
+              ></textarea>
+            {/if}
 
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="wordCount">Word Count:</label
-        >
-        <select
-          bind:value={formData.wordCount}
-          id="wordCount"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        >
-          {#each wordCountOptions as option (option)}
-            <option value={option}>{option}</option>
-          {/each}
-        </select>
+            {#if field.type === "select" && !field.condition}
+              <label
+                class="block text-gray-700 text-sm font-bold mb-2"
+                for={field.key}
+              >
+                {field.label}:
+              </label>
+              <div class="relative">
+                <button
+                  type="button"
+                  class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
+                  on:click={() => (field.showOptions = !field.showOptions)}
+                >
+                  {formData[field.key] || "Select an option"}
+                </button>
+                {#if field.showOptions}
+                  <div
+                    class="absolute z-10 w-full bg-white border rounded shadow-lg"
+                  >
+                    {#each field.options as option (option.value ? option.value : option)}
+                      <div
+                        class="premium-option p-2 hover:bg-gray-200 cursor-pointer"
+                        on:click={() => handleOptionClick(option, field)}
+                      >
+                        {option.value || option}
+                        {#if option.isPremium}
+                          <span class="premium-tag">
+                            <span class="icon">★</span> Premium
+                          </span>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
 
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="numEmails">Number of Emails:</label
-        >
-        <select
-          bind:value={formData.numEmails}
-          id="numEmails"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        >
-          {#each numEmailsOptions as num (num)}
-            <option value={num}>{num}</option>
-          {/each}
-        </select>
+            {#if field.type === "checkbox" && !field.condition}
+              <label class="block mt-4" for={field.key}>
+                <input
+                  type="checkbox"
+                  bind:checked={formData[field.key]}
+                  class="mr-2"
+                />
+                {field.label}
+              </label>
+            {/if}
 
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="problemFocus">Problem Focus:</label
-        >
-        <textarea
-          bind:value={formData.problemFocus}
-          id="problemFocus"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        ></textarea>
+            {#if field.type === "number" && !field.condition}
+              <label
+                class="block text-gray-700 text-sm font-bold mb-2"
+                for={field.key}
+              >
+                {field.label}:
+              </label>
+              <input
+                type="number"
+                bind:value={formData[field.key]}
+                id={field.key}
+                class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
+                max={field.attributes?.max}
+              />
+            {/if}
 
-        <p>
-          <label class="block mt-4" for="isBreakupEmail">
-            <input
-              type="checkbox"
-              bind:checked={formData.isBreakupEmail}
-              class="mr-2"
-            />
-            Last Email should be a break-up email?
-          </label>
-        </p>
+            {#if field.condition}
+              {#if formData[field.condition.dependsOn] === field.condition.value}
+                <label
+                  class="block text-gray-700 text-sm font-bold mb-2"
+                  for={field.key}
+                >
+                  {field.label}:
+                </label>
+                <select
+                  bind:value={formData[field.key]}
+                  id={field.key}
+                  class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
+                >
+                  {#each field.options as option (option)}
+                    <option value={option}>{option}</option>
+                  {/each}
+                </select>
+              {/if}
+            {/if}
+          </div>
+        {/each}
 
-        {#if formData.isBreakupEmail}
-          <label
-            class="block text-gray-700 text-sm font-bold mb-2"
-            for="breakupReason">Break-up reason:</label
+        <div class="button-container">
+          <button type="submit" class="btn btn-success mb-2 w-full"
+            >Generate New</button
           >
-          <select
-            bind:value={formData.breakupReason}
-            id="breakupReason"
-            class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-          >
-            {#each breakupReasons as reason (reason)}
-              <option value={reason}>{reason}</option>
-            {/each}
-          </select>
-        {/if}
-      </div>
+          {#if currentEmailIndex === 0}
+            <button
+              class="btn btn-neutral w-full"
+              on:click={() => {
+                toggleHideForm()
+              }}>Go Back</button
+            >
+          {/if}
+        </div>
+      </form>
+    </div>
 
-      <div class="form-section">
-        <!-- Fields for the second column -->
-        <!-- ... -->
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="targetAudience">Target audience:</label
-        >
-        <textarea
-          bind:value={formData.targetAudience}
-          id="targetAudience"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        ></textarea>
-
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="objective">Objective:</label
-        >
-        <select
-          bind:value={formData.objective}
-          id="objective"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        >
-          {#each objectives as obj (obj)}
-            <option value={obj}>{obj}</option>
-          {/each}
-        </select>
-
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="creativity">Creativity:</label
-        >
-        <select
-          bind:value={formData.creativity}
-          id="creativity"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        >
-          {#each creativityOptions as option (option)}
-            <option value={option}>{option}</option>
-          {/each}
-        </select>
-
-        <label class="block text-gray-700 text-sm font-bold mb-2" for="solution"
-          >Solution:</label
-        >
-        <textarea
-          bind:value={formData.solution}
-          id="solution"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        ></textarea>
-      </div>
-
-      <div class="button-container">
-        <label
-          class="block text-gray-700 text-sm font-bold mb-2"
-          for="emailToRewrite">Email to rewrite (max 500 words):</label
-        >
-        <textarea
-          bind:value={formData.emailToRewrite}
-          id="emailToRewrite"
-          rows="5"
-          maxlength="2000"
-          class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-        ></textarea>
-        <button class="btn btn-neutral" on:click={toggleHideForm}
-          >Go Back</button
-        >
-        <button type="submit" class="btn btn-success">Generate</button>
-      </div>
-    </form>
-  {/if}
-
-  {#if !reply && !isLoading && $showForm && selectedCopyType === "Long Form Email"}
-    <p>Displaying Long Form Email form...</p>
-    <!-- Long Form Email specific fields here -->
-  {/if}
-
-  {#if !reply && !isLoading && $showForm && selectedCopyType === "Offer Based Cold Email Sequence"}
-    <p>Displaying Offer Based Cold Email Sequence form...</p>
-    <!-- Offer Based Cold Email Sequence specific fields here -->
-  {/if}
-
-  {#if !reply && !isLoading && $showForm && selectedCopyType === "Value Based Cold Email Sequence"}
-    <p>Displaying Value Based Cold Email Sequence form...</p>
-    <!-- Value Based Cold Email Sequence specific fields here -->
-  {/if}
-
-  {#if reply && !isLoading && !$showForm}
-    <div>
+    <div class="reply-container">
       <div class="textarea-container">
         <!-- <textarea
           id="replyTextArea"
@@ -1086,124 +1053,137 @@
           {/if}
         </button>
       </div>
-
-      <div class="button-container">
-        <div
-          class="flex justify-center mt-1 py-2 rounded-md items-center hover:bg-base-200 cursor-pointer"
-          on:click={() => {
-            openStepModal()
-            isStepModalOpen = true
-          }}
-        >
-          <div class="all-caps">
-            {currentEmailSequenceName}
-          </div>
-          <div>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#000000"
-              stroke-width="1"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              style="margin-left: 0.5rem;"
-            >
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </div>
-        </div>
-        <div class="mb-3">
-          SEQUENCE ID # {currentEmailSequenceId}
-          / STEP {currentEmailIndex} OF {formData.numEmails}
-        </div>
-
-        <button
-          on:click={() => {
-            currentEmailIndex = 0
-            currentEmailId = ""
-            currentEmailSequenceId = ""
-            reply = ""
-            previousEmailId = null
-            nextEmailId = null
-            // fetchEmailSequences()
-            fetchUpdatedEmailSequences()
-          }}
-          class="btn btn-primary"
-          disabled={isTyping}
-          >{#if currentEmailIndex < formData.numEmails}Back
-          {:else}Finish{/if}
-        </button>
-        {#if currentEmailIndex > 0 && previousEmailId}
-          <button
+      {#if currentEmailIndex != 0}
+        <div class="button-container">
+          <div
+            class="flex justify-center mt-1 py-2 rounded-md items-center hover:bg-base-200 cursor-pointer"
             on:click={() => {
-              // nextEmailId = currentEmailId
-              // loadEmailId = previousEmailId
-              currentEmailIndex -= 1
-              handleLoad()
+              openStepModal()
+              isStepModalOpen = true
             }}
-            class="btn btn-outline"
-            disabled={isTyping}
           >
-            Previous
-          </button>
-        {/if}
-        {#if !nextEmailId}
-          <button
-            on:click={() => {
-              isRegenerate = 1
-              handleGenerate()
-            }}
-            class="btn btn-outline"
-            disabled={isTyping}
-          >
-            Regenerate
-          </button>
-        {/if}
-        {#if currentEmailIndex < formData.numEmails && !nextEmailId}
-          <button
-            on:click={() => {
-              currentEmailIndex += 1
-              previousEmailId = currentEmailId
-              currentEmailId = ""
+            <div class="all-caps">
+              {currentEmailSequenceName}
+            </div>
+            <div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#000000"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="margin-left: 0.5rem;"
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+          </div>
+          <div class="mb-3">
+            SEQUENCE ID # {currentEmailSequenceId}
+            / STEP {currentEmailIndex} OF {currentEmailSequenceSteps}
+          </div>
 
+          <button
+            on:click={() => {
+              // currentEmailIndex = 0
+              // currentEmailId = ""
               // currentEmailSequenceId = ""
-              // nextPrompt = `Write email # ${currentEmailIndex} of ${formData.wordCount}`
-              // prompt = `{"role": "assistant", "content": "${reply
-              //   .replace(/\n/g, "\\n")
-              //   .replace(/&/g, "\\&")
-              //   .replace(/"/g, '\\"')
-              //   .replace(/\u00A0/g, " ")}"}`
-              console.log("PREVIOUS EMAIL ID", previousEmailId)
-              handleGenerate()
+              // reply = ""
+              // previousEmailId = null
+              // nextEmailId = null
+              // formData = {}
+              // // fetchEmailSequences()
+              // fetchUpdatedEmailSequences()
+              toggleHideForm()
             }}
-            class="btn btn-success"
+            class="btn btn-neutral"
             disabled={isTyping}
-          >
-            Generate Next
+            >{#if currentEmailIndex < currentEmailSequenceSteps}Go Back
+            {:else}Finish{/if}
           </button>
-        {/if}
-        {#if currentEmailIndex < formData.numEmails && nextEmailId}
-          <button
-            on:click={() => {
-              // previousEmailId = currentEmailId
-              // loadEmailId = nextEmailId
-              currentEmailIndex += 1
+          {#if currentEmailIndex > 0 && previousEmailId}
+            <button
+              on:click={() => {
+                // nextEmailId = currentEmailId
+                // loadEmailId = previousEmailId
+                currentEmailIndex -= 1
+                handleLoad()
+              }}
+              class="btn btn-outline"
+              disabled={isTyping}
+            >
+              Previous
+            </button>
+          {/if}
+          {#if !nextEmailId && currentEmailIndex != 0}
+            <button
+              on:click={() => {
+                isRegenerate = 1
+                handleGenerate()
+              }}
+              class="btn btn-outline"
+              disabled={isTyping}
+            >
+              Regenerate
+            </button>
+          {/if}
+          {#if currentEmailIndex < currentEmailSequenceSteps && currentEmailIndex != 0 && !nextEmailId}
+            <button
+              on:click={() => {
+                currentEmailIndex += 1
+                previousEmailId = currentEmailId
+                currentEmailId = ""
 
-              handleLoad()
-            }}
-            class="btn btn-outline"
-            disabled={isTyping}
-          >
-            Next
-          </button>
-        {/if}
-      </div>
+                // currentEmailSequenceId = ""
+                // nextPrompt = `Write email # ${currentEmailIndex} of ${formData.wordCount}`
+                // prompt = `{"role": "assistant", "content": "${reply
+                //   .replace(/\n/g, "\\n")
+                //   .replace(/&/g, "\\&")
+                //   .replace(/"/g, '\\"')
+                //   .replace(/\u00A0/g, " ")}"}`
+                console.log("PREVIOUS EMAIL ID", previousEmailId)
+                handleGenerate()
+              }}
+              class="btn btn-success"
+              disabled={isTyping}
+            >
+              Generate Next
+            </button>
+          {/if}
+          {#if currentEmailIndex === 0}
+            <button
+              on:click={() => {
+                handleSubmit()
+              }}
+              class="btn btn-success"
+              disabled={isTyping}
+            >
+              Generate
+            </button>
+          {/if}
+          {#if currentEmailIndex < currentEmailSequenceSteps && nextEmailId}
+            <button
+              on:click={() => {
+                // previousEmailId = currentEmailId
+                // loadEmailId = nextEmailId
+                currentEmailIndex += 1
+
+                handleLoad()
+              }}
+              class="btn btn-outline"
+              disabled={isTyping}
+            >
+              Next
+            </button>
+          {/if}
+        </div>
+      {/if}
     </div>
   {/if}
-
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
     <div class="main-head">
       <div class="search-box border-solid rounded border border-gray-300">
@@ -1281,12 +1261,21 @@
             <span
               class="sequence-name"
               on:click={() => {
+                console.log("COPY FORM DATA", emailSequence.copy_form_data)
                 currentEmailIndex = 1
                 currentEmailSequenceId = emailSequence.id
                 currentEmailSequenceName = emailSequence.name
-                formData.numEmails = emailSequence.steps
-                formData.wordCount = emailSequence.word_count
+                currentEmailSequenceSteps = emailSequence.steps
+                // formData.numberOfEmails = emailSequence.steps
+                // formData.wordCount = emailSequence.word_count
+
+                //set all formData fields using json from copy_info
+                formData = emailSequence.copy_info
+
                 selectedCopyType = emailSequence.copy_type
+                selectedCopyTemplate = emailSequence.copy_template
+                selectedCopyTemplateId = emailSequence.copy_template_id
+                // formFields.set(emailSequence.copy_form_data)
                 handleLoad()
               }}>{emailSequence.name}</span
             >
@@ -1297,7 +1286,7 @@
                 currentEmailIndex = 1
                 currentEmailSequenceId = emailSequence.id
                 currentEmailSequenceName = emailSequence.name
-                formData.numEmails = emailSequence.steps
+                formData.numberOfEmails = emailSequence.steps
                 formData.wordCount = emailSequence.word_count
                 selectedCopyType = emailSequence.copy_type
                 handleLoad()
@@ -1540,6 +1529,31 @@
   </div>
 {/if}
 
+{#if isUpgradeModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeUpgradeModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <p class="mt-2 mb-4 text-center text-xl font-semibold text-neutral">
+        Premium Feature
+      </p>
+      <p class="text-center mb-4 text-neutral">
+        This feature is available only for paid plans. Please upgrade to access
+        this feature.
+      </p>
+      <a
+        href="/account/billing"
+        class="btn btn-wide btn-success mb-2"
+        on:click={closeUpgradeModal}>Upgrade</a
+      >
+      <button class="btn btn-wide" on:click={closeUpgradeModal}>Close</button>
+    </div>
+  </div>
+{/if}
+
 <style>
   input:focus {
     outline: none; /* Removes the black border */
@@ -1573,14 +1587,12 @@
   }
 
   .form-container {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: 20px;
     max-width: 800px;
     margin: auto;
     padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   }
 
   .form-section {
@@ -1588,9 +1600,42 @@
   }
 
   .button-container {
-    grid-column: span 2;
     text-align: center;
     margin-top: 0px;
+  }
+
+  .main-form-container,
+  .reply-container {
+    width: 100%;
+  }
+
+  @media (min-width: 1024px) {
+    .main-form-container,
+    .reply-container {
+      display: inline-block;
+      vertical-align: top;
+    }
+    .reply-container {
+      display: inline-block;
+      vertical-align: top;
+      width: 64%;
+    }
+
+    .main-form-container {
+      margin-right: 1px;
+      width: 35%;
+      max-height: 93vh;
+      overflow-y: auto;
+      /* Beautify the scrollbar using Tailwind CSS */
+      scrollbar-width: thin;
+    }
+    .main-form-container::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .main-form-container::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
   }
 
   .submit-button {
@@ -1916,5 +1961,35 @@
     width: 100%;
     text-align: center;
     pointer-events: none; /* Prevents interaction with the text */
+  }
+
+  .premium-option {
+    display: flex;
+    align-items: center;
+  }
+  .premium-tag {
+    display: inline-flex;
+    align-items: center;
+    background-color: #ffd700;
+    color: #333;
+    border-radius: 50px;
+    font-size: 0.6rem; /* Reduced text size */
+    font-weight: bold;
+    padding: 2px 6px;
+    margin-left: 8px;
+  }
+
+  .premium-tag .icon {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+    border-radius: 50%;
+    background-color: #ffd700;
+    color: #333;
+    font-size: 10px;
+    text-align: center;
+    line-height: 12px;
+    font-weight: bold;
   }
 </style>

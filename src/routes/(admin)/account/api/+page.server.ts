@@ -278,49 +278,87 @@ export const actions = {
     }
   },
 
-  generateAnthropicReply: async ({ request, locals: {  supabase, getSession } }) => {
+  generateReply: async ({ request, locals: {  supabase, getSession } }) => {
 console.log("WE ARE IN THE BACKEND GENERATE")
 
-let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",reply="",promptAdd="",fetchPromptEmailIndex,currentEmailSequenceName=''
+let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",promptAdd="",fetchPromptEmailIndex,currentEmailSequenceName=''
 
 
     const formData = await request.formData()
+
+    // console.log("businessDescription,targetAudience,objective,creativity,problemFocus,solution,emailToRewrite,wordCount",businessDescription,targetAudience,objective,creativity,problemFocus,solution,emailToRewrite,wordCount)
+    console.log("FORM DATAAAA",formData)
+
+    //declare formDAta variables dynamically with no hardcoding
+    
+
+    const copyType = formData.get("copyType");
+    const copyTemplate = formData.get("copyTemplate");
+    const copyTemplateId = formData.get("copyTemplateId");
+  
+    const newEmailId = formData.get("emailId") as string ?? null
+    const newEmailSequenceId = formData.get("emailSequenceId") as string ?? null
+    const previousEmailId = formData.get("previousEmailId") as string ?? null
+    const isRegenerate = formData.get("isRegenerate") as string ?? null
+    const currentEmailIndex = Number(formData.get("currentEmailIndex"))
+
+    const reply = formData.get("reply") as string ?? null;
+
+    // prompt = formData.get("prompt") as string ?? null;
+
+
+    console.log("CURRENT EMAIL INDEX",currentEmailIndex)
+    console.log("NEW EMAIL IDSSSSSSSS",newEmailId)
+    console.log("SEQ IDSSSSSSSS",newEmailSequenceId)
+    console.log("PREVIOUS EMAIL IDSSSSSSSS",previousEmailId)
+
+    
     // const formData = await request.json(); // Assuming the request data is sent as JSON
+    let formJson=formData.get("json")
+    if(newEmailSequenceId){
+      const {data,error} = await supabase
+      .from('copy_collection')
+      .select('copy_info')
+      .eq('id',newEmailSequenceId)
+      .single()
+      if(error){
+        console.error('Error fetching email sequence:', error);
+        throw new Error('Error fetching email sequence');
+      }
+      formJson=data.copy_info
+    }
+   
+
+
+    // let jsonInfo be json without wordCount and numberofEmails
+    let formJsonInfo = JSON.parse(formJson)
+    delete formJsonInfo.wordCount
+    delete formJsonInfo.numberOfEmails
+    formJsonInfo = JSON.stringify(formJsonInfo)
+    
+    
+    console.log("JSON INFO",formJsonInfo)
+    
+
+    //format formJSON to jsonb for supabase
+    let formJsonU = formJson.replace(/'|\\/g, '').replace(/"{/g, '{').replace(/}"/g, '}');
+    formJsonU = JSON.parse(formJsonU)
+
+    // let copyTemplateForm = formData.get("copyTemplateForm");
+    // copyTemplateForm = copyTemplateForm.replace(/'|\\/g, '').replace(/"{/g, '{').replace(/}"/g, '}');
+    // copyTemplateForm = JSON.parse(copyTemplateForm)
+
     const businessDescription = formData.get("businessDescription");
     const targetAudience = formData.get("targetAudience");
     const objective = formData.get("objective");
     const creativity = formData.get("creativity");
     const problemFocus = formData.get("problemFocus");
     const solution = formData.get("solution");
-    const emailToRewrite = formData.get("emailToRewrite");
-    const wordCount = formData.get("wordCount");
-    const copyType = formData.get("copyType");
-    const copyTemplate = formData.get("copyTemplate");
-    const copyTemplateId = formData.get("copyTemplateId");
     
-
-    reply = formData.get("reply") as string ?? null;
+    const emailToRewrite = JSON.parse(formJson).emailToRewrite
+    const wordCount = JSON.parse(formJson).wordCount
+    const steps = JSON.parse(formJson).numberOfEmails
     
-    prompt = formData.get("prompt") as string ?? null;
-
-    console.log("businessDescription,targetAudience,objective,creativity,problemFocus,solution,emailToRewrite,wordCount",businessDescription,targetAudience,objective,creativity,problemFocus,solution,emailToRewrite,wordCount)
-    console.log("FORM DATAAAA",formData)
-
-    // const promptA = formData.get("fullPrompt") as string
-
-    const newEmailId = formData.get("emailId") as string ?? null
-    const newEmailSequenceId = formData.get("emailSequenceId") as string ?? null
-    const previousEmailId = formData.get("previousEmailId") as string ?? null
-    const isRegenerate = formData.get("isRegenerate") as string ?? null
-    
-    const currentEmailIndex = Number(formData.get("currentEmailIndex"))
-    const steps = formData.get("steps")
-    // const wordCount = formData.get("wordCount") as string
-
-    console.log("CURRENT EMAIL INDEX",currentEmailIndex)
-    console.log("NEW EMAIL IDSSSSSSSS",newEmailId)
-    console.log("SEQ IDSSSSSSSS",newEmailSequenceId)
-    console.log("PREVIOUS EMAIL IDSSSSSSSS",previousEmailId)
 
 //FETCH PROMPT FROM DATABASE FOR CURRENT EMAIL IF IT EXISTS
 
@@ -479,7 +517,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       
    return {
     status: 200,
-    body: { reply: reply, name:currentEmailSequenceName, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId},
+    body: { reply: reply, name:currentEmailSequenceName, steps:steps, emailSequenceId: updatedEmailId, emailId: updatedEmailSequenceId},
   }
 
 
@@ -514,6 +552,8 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
               copy_type:copyType,
               copy_template:copyTemplate,
               copy_template_id:copyTemplateId,
+              copy_info: formJsonU,
+              // copy_form_data:copyTemplateForm,
               ...(newEmailSequenceId ? { id: newEmailSequenceId } : {}),
               // created_at: new Date(),
             },
@@ -600,7 +640,26 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
 
     const currentEmailSequenceId = Number(formData.get("emailSequenceId"))
     const currentEmailIndex = Number(formData.get("currentEmailIndex"))
-    
+    const selectedCopyTemplateId = Number(formData.get("selectedCopyTemplateId"))
+
+    //fetch form_data from copy_templates table
+    const { data: copyTemplateData, error: copyTemplateError } = await supabase
+    .from('copy_templates')
+    .select('form_data')
+    .eq('id', selectedCopyTemplateId)
+    .single();
+
+    if (copyTemplateError) {
+      console.error('Error fetching copy template data:', copyTemplateError);
+      throw new Error('Error fetching copy template data');
+    }
+
+    // const formDataJson = copyTemplateData.form_data
+    //stringify form_data
+    const formDataJson = JSON.stringify(copyTemplateData.form_data)
+    console.log("FETCHED FORM DATA",formDataJson)
+
+
 
     let currentEmail, previousEmailId, nextEmailId, currentEmailId,currentPrompt;
    
@@ -629,7 +688,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       
    return {
     status: 200,
-    body: { reply: currentEmail, previousEmailId:previousEmailId, nextEmailId:nextEmailId, currentEmailId:currentEmailId},
+    body: { reply: currentEmail, previousEmailId:previousEmailId, nextEmailId:nextEmailId, currentEmailId:currentEmailId, currentForm:formDataJson},
   }
       
 
@@ -742,7 +801,7 @@ console.log("SEARCH TERM",searchTerm)
       
       let { data: emailSequences, error } = await supabase
       .from('copy_collection')
-      .select('id,name,created_at,updated_at,steps,word_count,copy_type') //avoid passing user_id
+      .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data') //avoid passing user_id
       // .select()
       .eq('user_id', userId)
 
@@ -750,14 +809,14 @@ console.log("SEARCH TERM",searchTerm)
         console.log('SEARCHING NOW ......')
         emailSequences = (await supabase
         .from('copy_collection')
-        .select('id,name,created_at,updated_at,steps,word_count,copy_type')
+        .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data')
         .ilike('name', `%${searchTerm}%`)
         .order('updated_at')).data;
       } else {
         console.log('JUST FETCHING ......')
         emailSequences = (await supabase
         .from('copy_collection')
-        .select('id,name,created_at,updated_at,steps,word_count,copy_type')
+        .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data')
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .range(offset, offset + limit - 1)).data;
@@ -849,7 +908,7 @@ console.log("SEARCH TERM",searchTerm)
       // Fetch email sequences for the logged-in user
       const { data: copyTemplates, error } = await supabase
       .from('copy_templates')
-      .select('id, name')
+      .select('id, name, form_data')
       .eq('copy_type_id', copyTypeId);
         console.log("FETCHED COPY TEMPLATES",copyTemplates)
         
