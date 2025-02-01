@@ -487,6 +487,18 @@ console.log("CHECK NEW PROMPT",prompt)
 
 promptAdd = promptA.replace(/\[|\]/g, '')
 
+//get current user credits
+const { data: currentUser, error } = await supabaseServiceRole
+  .from("stripe_customers")
+  .select("credits")
+  .eq("user_id", userId)
+  .single();
+
+if (error) {
+  console.error('Error fetching current user credits:', error);
+  throw new Error('Error fetching current user credits');
+}
+
 //GENERATE COPY
     try {
       const message = await anthropic.messages.create({
@@ -506,21 +518,13 @@ promptAdd = promptA.replace(/\[|\]/g, '')
 
       // console.log('EXTRACTED',reply);
 
-const { data: currentUser, error } = await supabaseServiceRole
-  .from("stripe_customers")
-  .select("credits")
-  .eq("user_id", userId)
-  .single();
-
-if (error) {
-  console.error('Error fetching current user credits:', error);
-  throw new Error('Error fetching current user credits');
-}
+      
 
 const updatedCredits = currentUser.credits - requiredCredits;
 console.log("CURRENT USER CREDITS:", currentUser.credits);
 console.log("UPDATED CREDITS:", updatedCredits);
 
+// Update user credits
 const { data: updatedUser, error: updateError } = await supabaseServiceRole
   .from("stripe_customers")
   .update({ credits: updatedCredits })
@@ -531,6 +535,7 @@ if (updateError) {
   console.error('Error updating user credits:', updateError);
   throw new Error('Error updating user credits');
 }
+
 
 
 
@@ -600,7 +605,22 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
           console.error('Error creating email sequence:', sequenceError);
           throw new Error('Error creating email sequence');
         }
-      } else {updatedEmailSequenceId=newEmailSequenceId}
+      } else {
+        
+        updatedEmailSequenceId=newEmailSequenceId
+//update update_at field for emailSequenceId in copy_collection table
+const { data: emailSequenceData, error: emailSequenceError } = await supabaseServiceRole
+  .from('copy_collection')
+  .update({ updated_at: new Date() })
+  .eq('id', newEmailSequenceId)
+  .select();
+
+if (emailSequenceError) {
+  console.error('Error updating email sequence:', emailSequenceError);
+  throw new Error('Error updating email sequence');
+}
+
+      }
        
         // Add a new email linked to the created email_sequence
         console.log("NEW EMAIL IDDDDDDD",newEmailId)
@@ -1382,7 +1402,8 @@ console.log("FETCHED RESPONSES",data)
                 .from("copy_collection")
                 .select("*")
                 .eq("user_id", userId)
-                .eq("favourite", isFavourite);
+                .eq("favourite", isFavourite)
+                .order('updated_at', { ascending: false });
 
                 console.log("FETCHED FAVOURITE SEQUENCES",data)
               if (error) {

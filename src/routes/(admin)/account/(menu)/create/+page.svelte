@@ -3,6 +3,7 @@
   import type { Writable } from "svelte/store"
   import { onMount } from "svelte"
   import { writable } from "svelte/store"
+  import { invalidate } from "$app/navigation"
   // import { createClient } from "@supabase/supabase-js"
   import { debounce, min } from "lodash"
   import { load } from "../../create_profile/+page.js"
@@ -24,7 +25,11 @@
         ? "Premium"
         : "Free"
 
-  // let customerCredits = data.customerCredits
+  let customerCredits = data.customerCredits
+
+  // if customerCredits are less than 1 let exhaustedCredits equal to true else false
+  let exhaustedCredits = customerCredits < 1 ? true : false
+
   // let totalCredits = data.totalCredits
   // let customerPlanId = data.customerPlanId
   // let customerPlan = data.customerPlan
@@ -35,6 +40,7 @@
   let formData = {}
   let formFields = writable([])
 
+  let isNewGenerate = false
   let isLoading = false
   let reply = ""
   let currentEmailId = ""
@@ -83,6 +89,7 @@
   let isTemplateSearching = false
 
   let minChar = 5
+  let minCharText = `Minimum ${minChar + 1} characters`
 
   let currentPage = 1 // Tracks the current page
   const itemsPerPage = 10 // Number of results per page
@@ -541,18 +548,37 @@
 
   async function handleSubmit() {
     // isLoading = true
-    hasMoreRecords = true
-    currentEmailIndex = 1
-    currentEmailId = ""
-    currentEmailSequenceId = ""
-    currentEmailSequenceName = ""
-    previousEmailId = null
-    nextEmailId = null
+
+    isNewGenerate = true
 
     await handleGenerate()
   }
 
   async function handleGenerate() {
+    await invalidate("app:customerData")
+    customerCredits = data.customerCredits
+    exhaustedCredits = customerCredits < 1 ? true : false
+    console.log("EXHAUSTED CREDITS STATUS", exhaustedCredits)
+    console.log("CREDITS", customerCredits)
+    console.log("PLAN TYPE", planType)
+    console.log("GENERATING REPLY")
+
+    //if customerCredits is less than 1 and planType is Free then show upgrade modal and return
+    if (exhaustedCredits) {
+      console.log("NOT ENOUGH CREDITS")
+      isUpgradeModalOpen = true
+      return
+    }
+    if (isNewGenerate) {
+      hasMoreRecords = true
+      currentEmailIndex = 1
+      currentEmailId = ""
+      currentEmailSequenceId = ""
+      currentEmailSequenceName = ""
+      previousEmailId = null
+      nextEmailId = null
+    }
+
     isLoading = true
     isGenerating = true
     progress = 0
@@ -1359,7 +1385,7 @@
           <button type="submit" class="btn btn-success mb-2 w-full"
             >Generate New</button
           >
-          {#if currentEmailIndex === 0}
+          {#if currentEmailIndex === 0 || !reply}
             <button
               class="btn btn-neutral w-full"
               on:click={() => {
@@ -1434,7 +1460,7 @@
           {/if}
         </div>
       </div>
-      {#if currentEmailIndex != 0}
+      {#if currentEmailIndex != 0 && reply}
         <div class="button-container">
           <div
             class="flex justify-center mt-1 py-2 rounded-md items-center hover:bg-base-200 cursor-pointer"
@@ -1571,7 +1597,6 @@
         class="search-box border-solid rounded border border-gray-300 flex items-center"
       >
         <button
-          title="Show All Starred"
           class="tooltip tooltip-right pr-2"
           data-tip="Show All Starred"
           on:click={() => showStarredSequences()}
@@ -1618,7 +1643,7 @@
     </div>
     <div class="w-full mt-2">
       {#if searchTerm.length > 0 && searchTerm.length <= minChar}
-        <p>Minimum 6 characters</p>
+        <p>{minCharText}</p>
       {:else if searchTerm.length > minChar}
         <p>
           There’s {resultsCount} copy collections matching “{searchTerm}”
@@ -1725,7 +1750,7 @@
                 // formFields.set(emailSequence.copy_form_data)
                 handleLoad()
               }}
-              >{emailSequence.name} ({emailSequence.favourite})
+              >{emailSequence.name}
               <br />
               <p class="text-xs text-gray-500">
                 <span title={`${formatDate(emailSequence.updated_at)}`}>
@@ -1775,9 +1800,12 @@
       <button
         class="btn btn-primary"
         on:click={loadMore}
-        disabled={!hasMoreRecords || isLoadingNewSequences || isSearching}
+        disabled={!hasMoreRecords ||
+          isLoadingNewSequences ||
+          isSearching ||
+          showStarred}
       >
-        {#if !hasMoreRecords || isSearching}
+        {#if !hasMoreRecords || isSearching || showStarred}
           No More Records
         {:else}
           {isLoadingNewSequences ? "Loading..." : "Show More"}
@@ -2006,7 +2034,7 @@
         />
 
         {#if searchTemplateTerm.length > 0 && searchTemplateTerm.length <= minChar}
-          <p>Minimum 6 characters</p>
+          <p>{minCharText}</p>
         {:else if searchTemplateTerm.length > minChar}
           <p>
             There’s {resultsTemplateCount} templates matching “{searchTemplateTerm}”
@@ -2118,11 +2146,15 @@
   >
     <div class="copy-type-modal" role="document" on:click|stopPropagation>
       <p class="mt-2 mb-4 text-center text-xl font-semibold text-neutral">
-        Premium Feature
+        {#if exhaustedCredits}You Are Out Of Credits{:else}Premium Feature{/if}
       </p>
       <p class="text-center mb-4 text-neutral">
-        This feature is available only for paid plans. Please upgrade to access
-        this feature.
+        {#if exhaustedCredits}
+          Please upgrade to get more credits.
+        {:else}
+          This feature is available only for paid plans. Please upgrade to
+          access this feature.
+        {/if}
       </p>
       <a
         href="/account/billing"
