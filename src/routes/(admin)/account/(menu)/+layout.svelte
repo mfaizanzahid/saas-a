@@ -68,7 +68,7 @@
         </div>
       </div>
     </div>
-    <div class="container px-6 lg:px-12 py-3 lg:py-6">
+    <div class="container px-6 lg:px-6 py-3 lg:py-6">
       <slot />
     </div>
   </div>
@@ -196,10 +196,18 @@
       </li>
       <li class="mt-auto">
         <span class="mt-auto text-base">
-          Credits Remaining: {customerCredits} / {totalCredits}
-          {#if isCreditLoading}
+          <a href="/account/billing">
+            Credits Remaining: {customerCredits} / {totalCredits}
+          </a>
+
+          <button
+            class="tooltip"
+            data-tip="Refresh"
+            on:click={refetchData}
+            disabled={isCreditLoading}
+          >
             <svg
-              class="animate-spin h-4 w-4"
+              class={`h-4 w-4 ${isCreditLoading ? "animate-spin" : ""}`}
               width="24"
               height="24"
               viewBox="0 0 24 24"
@@ -211,27 +219,9 @@
             >
               <path stroke="none" d="M0 0h24v24H0z" />
               <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -5v5h5" />
-              <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5" /></svg
-            >
-          {:else}
-            <button on:click={refetchData} disabled={isCreditLoading}>
-              <svg
-                class="h-4 w-4"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                stroke-width="2"
-                stroke="currentColor"
-                fill="none"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path stroke="none" d="M0 0h24v24H0z" />
-                <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -5v5h5" />
-                <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5" /></svg
-              >
-            </button>
-          {/if}
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5" />
+            </svg>
+          </button>
         </span>
       </li>
 

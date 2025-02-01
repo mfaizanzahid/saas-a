@@ -278,10 +278,10 @@ export const actions = {
     }
   },
 
-  generateReply: async ({ request, locals: {  supabase, getSession } }) => {
+  generateReply: async ({ request, locals: {  supabase, getSession, supabaseServiceRole } }) => {
 console.log("WE ARE IN THE BACKEND GENERATE")
 
-let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",promptAdd="",fetchPromptEmailIndex,currentEmailSequenceName=''
+let requiredCredits,prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",promptAdd="",fetchPromptEmailIndex,currentEmailSequenceName=''
 
 
     const formData = await request.formData()
@@ -326,12 +326,16 @@ let prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",promp
         throw new Error('Error fetching email sequence');
       }
       formJson=data.copy_info
+      //format formJSON to json
+      formJson = JSON.stringify(formJson)
+
     }
    
-
+console.log("FORM JSON",formJson)
 
     // let jsonInfo be json without wordCount and numberofEmails
     let formJsonInfo = JSON.parse(formJson)
+ 
     delete formJsonInfo.wordCount
     delete formJsonInfo.numberOfEmails
     formJsonInfo = JSON.stringify(formJsonInfo)
@@ -415,7 +419,7 @@ console.log("DATABASE RESULT",currentEmailData)
      // Fetch copy template prompts
      const { data: copyTemplatePromptsData, error: copyTypeError } = await supabase
      .from('copy_templates')
-     .select('system_prompt, first_prompt, next_prompt')
+     .select('system_prompt, first_prompt, next_prompt,credits')
      .eq('id', copyTemplateId)
      .single();
 
@@ -427,7 +431,7 @@ console.log("DATABASE RESULT",currentEmailData)
      modelInstructions = copyTemplatePromptsData.system_prompt
      firstPrompt = copyTemplatePromptsData.first_prompt.replace("${wordCount}", wordCount)
      nextPrompt = copyTemplatePromptsData.next_prompt.replace("${currentEmailIndex}", currentEmailIndex).replace("${wordCount}", wordCount).replace("${steps}", steps)
-
+     requiredCredits = Number(copyTemplatePromptsData.credits)
   
 
 
@@ -435,6 +439,7 @@ console.log("DATABASE RESULT",currentEmailData)
    console.log("MODEL INSTRUCTIONS",modelInstructions)
    console.log("FIRST PROMPT",firstPrompt)
    console.log("NEXT PROMPT",nextPrompt)
+   console.log("REQUIRED CREDITS",requiredCredits)
 
 
 if (currentEmailIndex==1 && !newEmailId) {
@@ -500,6 +505,34 @@ promptAdd = promptA.replace(/\[|\]/g, '')
       const reply = message.content[0]?.text || ''
 
       // console.log('EXTRACTED',reply);
+
+const { data: currentUser, error } = await supabaseServiceRole
+  .from("stripe_customers")
+  .select("credits")
+  .eq("user_id", userId)
+  .single();
+
+if (error) {
+  console.error('Error fetching current user credits:', error);
+  throw new Error('Error fetching current user credits');
+}
+
+const updatedCredits = currentUser.credits - requiredCredits;
+console.log("CURRENT USER CREDITS:", currentUser.credits);
+console.log("UPDATED CREDITS:", updatedCredits);
+
+const { data: updatedUser, error: updateError } = await supabaseServiceRole
+  .from("stripe_customers")
+  .update({ credits: updatedCredits })
+  .eq("user_id", userId)
+  .single();
+
+if (updateError) {
+  console.error('Error updating user credits:', updateError);
+  throw new Error('Error updating user credits');
+}
+
+
 
 
 
@@ -611,12 +644,18 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
   console.error('Error adding records', error);
   throw new Error('Error adding records');
 }
+
 }
+
 
 
       // return {
       //   reply: reply,
       // };
+   
+
+      
+     
       
     } catch (error) {
       console.error('Error contacting Anthropic API:', error);
@@ -797,32 +836,17 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       //   // console.log("FETCH SEQUENCES",emailSequences)
       //   console.log("FETCHED SEQUENCES")
 
-console.log("SEARCH TERM",searchTerm)
+console.log("SEARCH SEQUENCE TERM",searchTerm)
       
-      let { data: emailSequences, error } = await supabase
-      .from('copy_collection')
-      .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data') //avoid passing user_id
-      // .select()
-      .eq('user_id', userId)
-
-      if(searchTerm) {
-        console.log('SEARCHING NOW ......')
-        emailSequences = (await supabase
+      const { data: emailSequences, error } = await supabase
         .from('copy_collection')
-        .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data')
-        .ilike('name', `%${searchTerm}%`)
-        .order('updated_at')).data;
-      } else {
-        console.log('JUST FETCHING ......')
-        emailSequences = (await supabase
-        .from('copy_collection')
-        .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data')
+        .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data,favourite')
         .eq('user_id', userId)
+        .ilike('name', `%${searchTerm || ''}%`)
         .order('updated_at', { ascending: false })
-        .range(offset, offset + limit - 1)).data;
+        .range(searchTerm ? 0 : offset, searchTerm ? 100 : offset + limit - 1);
+
         
-      }
-      console.log("FETCHED SEQUENCES")
 
       if (error) {
         console.error('Error fetching email sequences:', error);
@@ -830,7 +854,6 @@ console.log("SEARCH TERM",searchTerm)
       }
 
       return {
-       
         body: JSON.stringify(emailSequences)
       };
 
@@ -901,26 +924,57 @@ console.log("SEARCH TERM",searchTerm)
     const formData = await request.formData()
    
     const copyTypeId = formData.get('copyTypeId');
+    const searchTerm = formData.get('searchTerm');
     console.log("COPY TYPE ID",copyTypeId)
+    console.log("SEARCH COPY TEMPLATE TERM",searchTerm)
 
 // console.log("FETCHING COPY TYPES")
     try {
       // Fetch email sequences for the logged-in user
       const { data: copyTemplates, error } = await supabase
       .from('copy_templates')
-      .select('id, name, form_data')
-      .eq('copy_type_id', copyTypeId);
-        console.log("FETCHED COPY TEMPLATES",copyTemplates)
-        
+      .select('id, name, form_data, info')
+      .eq('copy_type_id', copyTypeId)
+      .ilike('name', `%${searchTerm || ''}%`)
+      .order('created_at', { ascending: false });
+
       if (error) {
         console.error('Error fetching copy templates', error);
         throw new Error('Error fetching copy templates');
       }
 
+      //check favourite_templates table for user's favourite templates
+      const { data: favouriteTemplates, error: favouriteError } = await supabase
+      .from('favourite_templates')
+      .select('copy_template_id')
+      .eq('user_id', userId);
+      
+
+      if (favouriteError) {
+        console.error('Error fetching favourite templates:', favouriteError);
+        throw new Error('Error fetching favourite templates');
+      }
+
+     //set favourite flag for each template
+      copyTemplates.forEach((template) => {
+        template.isFavourite = favouriteTemplates.some((favourite) => favourite.copy_template_id === template.id);
+      });
+
+      //sort by favourite flag
+      copyTemplates.sort((a, b) => {
+        if (a.isFavourite && !b.isFavourite) return -1;
+        if (!a.isFavourite && b.isFavourite) return 1;
+        return 0;
+      })
+
+      
+
       return {
-       
         body: JSON.stringify(copyTemplates)
       };
+      
+
+     
       
     } catch (error) {
       console.error('Error fetching copy types:', error);
@@ -1073,6 +1127,287 @@ console.log("DELETED SEQUENCE",data)
 
 }
   },
+
+  saveResponse: async ({ request, locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+    const formData = await request.formData()
+    // const formData = await request.json(); // Assuming the request data is sent as JSON
+
+   
+
+
+    console.log("SAVE NAME FORM DATAAAA",formData)
+
+    const responseName =formData.get("responseName") as string
+    let response = formData.get("response")
+    response = JSON.parse(response)
+
+    console.log("RESPONSE",response)
+    console.log("RESPONSE NAME",responseName)
+
+    //save response in user_responses table
+    const { data, error } = await supabase
+      .from("user_responses")
+      .insert([
+        {
+          user_id: userId,
+          response: response,
+          name: responseName,
+        },
+      ])
+
+    if (error) {
+      console.error('Error saving response:', error);
+      throw new Error('Error saving response');
+    }
+
+    return {
+      status: 200,
+      body: JSON.stringify(data),
+    }
+  },
+  
+
+  loadAllResponses: async ({ request, locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;  
+
+    if (!session) {
+      return {
+        status: 401,  
+        body: { errorMessage: 'User not authenticated' },
+      };
+    } 
+
+    const formData = await request.formData()
+    console.log("FETCH RESPONSES FORM DATAAAA",formData)
+    const searchTerm = formData.get("searchTerm")
+    const page = parseInt(formData.get("page"))
+    const limit = parseInt(formData.get("limit"))
+    
+    const offset = (page - 1) * limit;
+
+    try {
+      let { data, error, count } = await supabase
+        .from("user_responses")
+        .select("*", { count: "exact" })
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if(searchTerm) {
+        data = (await supabase
+        .from("user_responses")
+        .select("*", { count: "exact" })
+        .ilike('name', `%${searchTerm}%`)
+        .order("updated_at", { ascending: false })
+        .range(offset, offset + limit - 1)).data;
+      }
+
+console.log("FETCHED RESPONSES",data)
+      if (error) {
+        console.error('Error loading responses:', error);
+        throw new Error('Error loading responses');
+      }
+
+      return {
+        status: 200,
+        body: JSON.stringify(data),
+      };
+    } catch (error) {
+      console.error('Error loading responses:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error loading responses' },
+      }
+    }
+    },
+
+    deleteResponse: async ({ request, locals: { supabase, getSession } }) => {
+      const session = await getSession();
+      const userId = session?.user.id;
+  
+      if (!session) {
+        return {
+          status: 401,  
+          body: { errorMessage: 'User not authenticated' },
+        };
+      } 
+  
+      const formData = await request.formData()
+      const deleteId = formData.get("responseId");
+  
+      try {
+        const { data, error } = await supabase
+          .from("user_responses")
+          .delete()
+          .eq("user_id", userId)
+          .eq("id", deleteId);
+  
+        if (error) {
+          console.error('Error deleting email sequence:', error);
+          throw new Error('Error deleting email sequence');
+        }
+  
+        return {
+          status: 200,
+          body: JSON.stringify(data),
+        };
+      } catch (error) {
+        console.error('Error deleting email sequence:', error);
+        return {
+          status: 500,
+          body: { errorMessage: 'Error deleting email sequence' },
+        }
+  
+      }
+      },
+
+      updateTemplateFavouriteStatus: async ({ request, locals: { supabase, getSession } }) => {
+        const session = await getSession();
+        const userId = session?.user.id;
+    
+        if (!session) {
+          return {
+            status: 401,  
+            body: { errorMessage: 'User not authenticated' },
+          };
+        } 
+    
+        const formData = await request.formData()
+        const templateId = formData.get("templateId");
+        const isFavourite = formData.get("isFavourite");
+    
+        try {
+          if (isFavourite === "true") {
+            const { data, error } = await supabase
+              .from("favourite_templates")
+              .insert({ user_id: userId, copy_template_id: templateId });
+      
+            if (error) {
+              console.error('Error adding favourite template:', error);
+              throw new Error('Error adding favourite template');
+            }
+          } else {
+            const { data, error } = await supabase
+              .from("favourite_templates")
+              .delete()
+              .eq("user_id", userId)
+              .eq("copy_template_id", templateId);
+      
+            if (error) {
+              console.error('Error deleting favourite template:', error);
+              throw new Error('Error deleting favourite template');
+            }
+          }
+    
+          return {
+            status: 200,
+            body: JSON.stringify({ message: "Favourite template updated successfully" }),
+          } 
+        } catch (error) {
+          console.error('Error updating favourite template:', error);
+          return {
+            status: 500,
+            body: { errorMessage: 'Error updating favourite template' },
+          }
+    
+        }
+        },
+
+        updateEmailSequenceFavouriteStatus: async ({ request, locals: { supabase, getSession } }) => {
+          const session = await getSession();
+          const userId = session?.user.id;
+      
+          if (!session) {
+            return {
+              status: 401,  
+              body: { errorMessage: 'User not authenticated' },
+            };
+          }
+      
+          const formData = await request.formData();
+          console.log("COPY FAVOURITE FORM DATA",formData)
+          const emailSequenceId = formData.get("emailSequenceId");
+          const isFavourite = formData.get("isFavourite");
+      
+          try {
+            const { data, error } = await supabase
+              .from("copy_collection")
+              .update({ favourite: isFavourite })
+              .eq("user_id", userId)
+              .eq("id", emailSequenceId);
+      
+            if (error) {
+              console.error('Error updating favourite email sequence:', error);
+              throw new Error('Error updating favourite email sequence');
+            }
+      
+            return {
+              status: 200,
+              body: JSON.stringify({ message: "Favourite email sequence updated successfully" }),
+            }
+          } catch (error) {
+            console.error('Error updating favourite email sequence:', error);
+            return {
+              status: 500,
+              body: { errorMessage: 'Error updating favourite email sequence' },
+            }
+          }
+        },
+
+          getFavouriteSequences: async ({ request, locals: { supabase, getSession } }) => {
+            const session = await getSession();
+            const userId = session?.user.id;
+            if (!session) {
+              return {
+                status: 401,
+                body: { errorMessage: 'User not authenticated' },
+              };
+            }
+            const formData = await request.formData();
+            console.log("FETCH FAVOURITE SEQUENCES FORM DATAAAA",formData)
+            const isFavourite = formData.get("isFavourite");
+            try {
+              const { data, error } = await supabase
+                .from("copy_collection")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("favourite", isFavourite);
+
+                console.log("FETCHED FAVOURITE SEQUENCES",data)
+              if (error) {
+                console.error('Error fetching favourite email sequences:', error);
+                throw new Error('Error fetching favourite email sequences');
+              }
+              return {
+                status: 200,
+                body: JSON.stringify(data),
+              };
+            } catch (error) {
+              console.error('Error fetching favourite email sequences:', error);
+              return {
+                status: 500,
+                body: { errorMessage: 'Error fetching favourite email sequences' },
+              };
+            }
+          },
+
+        
+
+            
+            
+
+
 
 
 

@@ -4,7 +4,8 @@
   import { onMount } from "svelte"
   import { writable } from "svelte/store"
   // import { createClient } from "@supabase/supabase-js"
-  import { debounce } from "lodash"
+  import { debounce, min } from "lodash"
+  import { load } from "../../create_profile/+page.js"
 
   // import { PUBLIC_SUPABASE_URL } from "$env/static/public"
   // import { PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public"
@@ -50,6 +51,7 @@
   let isCopySuccessful = false
 
   let emailSequences = writable([])
+  let savedResponses = writable([])
   let showForm = writable(false)
 
   let isModalOpen = false
@@ -72,9 +74,25 @@
   let isRegenerate = 0
   let isGenerating = false
 
+  let isLoadResponsesModalOpen = false
+  let isLoadingResponses = false
+  let isSavingResponse = false
+  let hasMoreResponses = true
+  let searchTemplateTerm = ""
+  let resultsTemplateCount = 0
+  let isTemplateSearching = false
+
+  let minChar = 5
+
   let currentPage = 1 // Tracks the current page
   const itemsPerPage = 10 // Number of results per page
   let updatedRecordCount = itemsPerPage
+
+  let currentResponsePage = 1 // Tracks the current page
+  const responsesPerPage = 10 // Number of results per page
+  let updatedResponseCount = responsesPerPage
+  let fetchUpdatedResponses = false
+  let isLoadingNewResponses = false
 
   // Store for email sequences and selection state
   let isSelectionMode = writable(false)
@@ -87,12 +105,13 @@
   let searchTerm = ""
   let resultsCount = 0
   let isSearching = false
+  let isSearchingResponses = false
   let progress = 0 // Progress percentage
   let intervalId
   let isStepRename = false
   let isStepDelete = false
   let isStepModalOpen = false
-  let deleteConfirm
+  let deleteConfirm = false
 
   let copyTemplates = writable([])
   let selectedCopyTypeId = null
@@ -102,9 +121,12 @@
   let isCopyTemplateModalOpen = false
 
   let isUpgradeModalOpen = false
+  let isSaveResponseModalOpen = false
+  let responseName = ""
+  let showStarred = false
 
   async function fetchCopyTemplates(copyTypeId) {
-    const formDataString = `copyTypeId=${copyTypeId}`
+    const formDataString = `copyTypeId=${copyTypeId}&searchTerm=${searchTemplateTerm}`
     const response = await fetch("/account/api?/fetchCopyTemplates", {
       method: "POST",
       headers: {
@@ -114,7 +136,9 @@
     })
     if (response.ok) {
       const result = await response.json()
+      console.log("COPY TEMPLATE RESULT", result)
       const jsonCopyTemplateData = JSON.parse(result.data)
+      console.log("JSON COPY TEMPLATES", jsonCopyTemplateData)
       const jsonCopyTemplateDataC = JSON.parse(jsonCopyTemplateData[1])
 
       console.log("JSON C", jsonCopyTemplateDataC)
@@ -125,11 +149,183 @@
     }
   }
 
+  function loadResponse(response) {
+    // Fetch response value from response
+    let formResponse = response.response
+
+    // Set formData to formResponse
+    formData = formResponse
+
+    // Update formFields based on formResponse
+    Object.entries(formResponse).forEach(([key, value]) => {
+      if ($formFields.hasOwnProperty(key)) {
+        $formFields[key].value = value
+      }
+    })
+
+    isLoadResponsesModalOpen = false
+  }
+
+  function deleteResponse(response) {
+    const formDataString = `responseId=${response.id}`
+    fetch("/account/api?/deleteResponse", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+      .then((response) => {
+        if (response.ok) {
+          console.log("Response deleted successfully")
+          console.log("UPDATED RESPONSE COUNT", updatedResponseCount)
+          fetchUpdatedResponses = true
+          loadResponses()
+        } else {
+          console.error("Failed to delete response")
+        }
+      })
+      .catch((error) => {
+        console.error("Error deleting response:", error)
+      })
+
+    // savedResponses.update((responses) => {
+    //   return responses.filter((r) => r.id !== response.id)
+    // })
+    //decrease updatedReponseCount by 1
+    // updatedResponseCount--
+  }
+
+  async function saveResponse() {
+    isSaving = true
+    // console.log("SAVE NAME??????", currentSequence, newName, isModalOpen)
+
+    const formDataString = `response=${JSON.stringify(formData)}&responseName=${responseName}`
+
+    // Update the sequence name in the Supabase database
+    try {
+      const response = await fetch("/account/api?/saveResponse", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formDataString,
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        const jsonData = JSON.parse(result.data)
+        closeSaveResponseModal()
+      } else {
+        console.error("Update Response Name failed")
+        // Handle error appropriately
+      }
+    } catch (error) {
+      console.error("Error updating response name:", error.message)
+      // Handle error
+    } finally {
+      isSaving = false
+      isSaveResponseModalOpen = false
+      responseName = ""
+      hasMoreResponses = true
+      fetchUpdatedResponses = true
+      // updatedResponseCount += 1
+    }
+  }
+
+  async function loadResponses(responsePage = 1) {
+    isLoadingNewResponses = true
+    //if savedResponses is not empty and fetchUpdatedResponses == false then do not proceed
+    console.log("UPDATED RESPONSE COUNT", updatedResponseCount)
+    console.log("SAVED RESPONSES", $savedResponses)
+    console.log("FETCHING UPATED RESPONSES????", fetchUpdatedResponses)
+
+    const formDataString = fetchUpdatedResponses
+      ? `page=1&limit=${updatedResponseCount}&searchTerm=${searchTemplateTerm}`
+      : `page=${responsePage}&limit=${responsesPerPage}`
+    console.log("FORM DATA STRING", formDataString)
+    const response = await fetch("/account/api?/loadAllResponses", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+    if (response.ok) {
+      const result = await response.json()
+      const jsonData = JSON.parse(result.data)
+      console.log("SAVED RESPONSES JSON DATA", jsonData)
+      const jsonDataC = JSON.parse(jsonData[2])
+      console.log("SAVED RESPONSES JSON DATA C", jsonDataC)
+      const sortedResponses = jsonDataC.sort(
+        (a, b) => b.updated_at - a.updated_at,
+      )
+
+      if (jsonDataC.length < responsesPerPage) {
+        hasMoreResponses = false // No more records to load
+      }
+
+      if (responsePage === 1 || isSaving || fetchUpdatedResponses) {
+        // Replace the list on the first page load
+        savedResponses.set(jsonDataC)
+      } else {
+        // Append new records to the existing list
+        savedResponses.update((existingRecords) => {
+          const existingIds = existingRecords.map((r) => r.id)
+          const newRecords = jsonDataC.filter(
+            (r) => !existingIds.includes(r.id),
+          )
+          return [...existingRecords, ...newRecords]
+        })
+      }
+      updatedResponseCount = $savedResponses.length
+
+      if (updatedResponseCount < responsesPerPage) {
+        updatedResponseCount = responsesPerPage
+      }
+
+      fetchUpdatedResponses = false
+
+      // isLoadingResponses = false
+      console.log("RESPONSES", $savedResponses)
+    } else {
+      console.error("Failed to fetch responses")
+    }
+  }
+
+  async function loadMoreResponses() {
+    if (isLoadingNewResponses) return // Prevent multiple clicks
+    console.log("LOADING NEW RESPONSES", isLoadingNewResponses)
+    // isLoadingNewResponses = true
+
+    try {
+      console.log("LOADING NEW RESPONSES", isLoadingNewResponses)
+      // currentResponsePage += 1
+
+      //update currentResponsePage based on updatedResponseCount and responsesPerPage + 1
+
+      currentResponsePage =
+        Math.floor(updatedResponseCount / responsesPerPage) + 1
+
+      await loadResponses(currentResponsePage) // Wait for the fetch operation to complete
+      // window.scrollTo({
+      //   top: document.body.scrollHeight,
+      //   behavior: "smooth",
+      // })
+    } catch (error) {
+      console.error("Error loading responses:", error)
+    } finally {
+      isLoadingNewResponses = false // Reset after loading completes
+    }
+  }
+
   function handleCopyTypeSelection(type) {
-    copyTemplates.set([])
-    selectedCopyType = type.name
-    selectedCopyTypeId = type.id
-    fetchCopyTemplates(selectedCopyTypeId)
+    if (selectedCopyTypeId !== type.id) {
+      copyTemplates.set([])
+      selectedCopyType = type.name
+      selectedCopyTypeId = type.id
+      fetchCopyTemplates(selectedCopyTypeId)
+    }
     isCopyTypeModalOpen = false
     isCopyTemplateModalOpen = true
   }
@@ -197,6 +393,25 @@
 
   function closeDeleteModal() {
     isDeleteModalOpen = false
+  }
+
+  function openSaveResponseModal() {
+    isSaveResponseModalOpen = true
+  }
+
+  function closeSaveResponseModal() {
+    isSaveResponseModalOpen = false
+  }
+
+  function openLoadResponsesModal() {
+    isLoadResponsesModalOpen = true
+  }
+
+  function closeLoadResponsesModal() {
+    isLoadResponsesModalOpen = false
+    // hasMoreResponses = true
+    // updatedResponseCount = responsesPerPage
+    // currentResponsePage = 1
   }
 
   async function saveName() {
@@ -326,7 +541,7 @@
 
   async function handleSubmit() {
     // isLoading = true
-
+    hasMoreRecords = true
     currentEmailIndex = 1
     currentEmailId = ""
     currentEmailSequenceId = ""
@@ -501,7 +716,7 @@
     // isLoadingSequences = true
 
     const formDataString = `page=${page}&limit=${itemsPerPage}`
-
+    console.log("FORM DATA STRING", formDataString)
     const response = await fetch("/account/api?/getEmailSequences", {
       method: "POST",
       headers: {
@@ -526,7 +741,13 @@
         emailSequences.set(jsonDataC)
       } else {
         // Append new results for subsequent pages
-        emailSequences.update((existing) => [...existing, ...jsonDataC])
+        // emailSequences.update((existing) => [...existing, ...jsonDataC])
+
+        const existingIds = $emailSequences.map((s) => s.id)
+        const newSequences = jsonDataC.filter(
+          (s) => !existingIds.includes(s.id),
+        )
+        emailSequences.update((existing) => [...existing, ...newSequences])
 
         //  // Append new results for subsequent pages, ignoring duplicates
         //  const existingIds = $emailSequences.map((s) => s.id)
@@ -536,8 +757,8 @@
         // emailSequences.update((existing) => [...existing, ...newSequences])
       }
       updatedRecordCount = $emailSequences.length
-      if (updatedRecordCount < 10) {
-        updatedRecordCount = 10
+      if (updatedRecordCount < itemsPerPage) {
+        updatedRecordCount = itemsPerPage
       }
       console.log("UPDATED RECORD COUNT", updatedRecordCount)
 
@@ -557,7 +778,7 @@
     // }
 
     const formDataString = `page=1&limit=${updatedRecordCount}&searchTerm=${searchTerm}`
-
+    console.log("FORM DATA STRING UPDATED", formDataString)
     const response = await fetch("/account/api?/getEmailSequences", {
       method: "POST",
       headers: {
@@ -591,7 +812,9 @@
 
     try {
       console.log("LOADING NEW SEQUENCES", isLoadingNewSequences)
-      currentPage += 1
+      // currentPage += 1
+      currentPage = Math.floor(updatedRecordCount / itemsPerPage) + 1
+      console.log("CURRENT PAGE", currentPage)
       await fetchEmailSequences(currentPage) // Wait for the fetch operation to complete
       window.scrollTo({
         top: document.body.scrollHeight,
@@ -748,7 +971,8 @@
 
   // Search email sequences from the server
   const fetchResults = debounce(async () => {
-    if (searchTerm.length >= 6) {
+    if (searchTerm.length > minChar) {
+      console.log("SEARCHING COLLECTIONS FOR TERM", searchTerm)
       isSearching = true
 
       try {
@@ -793,6 +1017,43 @@
   // Trigger search when searchTerm changes
   $: fetchResults()
 
+  // Search email sequences from the server
+  const fetchTemplateResults = debounce(async () => {
+    if (searchTemplateTerm.length > minChar) {
+      isTemplateSearching = true
+
+      try {
+        const formDataString = `copyTypeId=${selectedCopyTypeId}&searchTerm=${searchTemplateTerm}`
+        const response = await fetch("/account/api?/fetchCopyTemplates", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formDataString,
+        })
+        if (response.ok) {
+          const result = await response.json()
+          const jsonCopyTemplateData = JSON.parse(result.data)
+          const jsonCopyTemplateDataC = JSON.parse(jsonCopyTemplateData[1])
+
+          console.log("JSON C", jsonCopyTemplateDataC)
+          copyTemplates.set(jsonCopyTemplateDataC)
+        }
+
+        resultsTemplateCount = $copyTemplates.length || 0
+      } catch (error) {
+        console.error("Error fetching template results:", error)
+        copyTemplates.set([]) // Clear the store in case of error
+        resultsTemplateCount = 0
+      }
+    } else {
+      resultsTemplateCount = 0
+    }
+  }, 300) // 300ms debounce delay
+
+  // Trigger search when searchTemplateTerm changes
+  $: fetchTemplateResults()
+
   onMount(() => {
     fetchEmailSequences(currentPage)
     fetchCopyTypes()
@@ -809,6 +1070,111 @@
 
   function closeUpgradeModal() {
     isUpgradeModalOpen = false
+  }
+
+  function formatRelativeTime(dateString) {
+    const now = Date.now()
+    const date = new Date(dateString).getTime()
+    const deltaSeconds = Math.floor((now - date) / 1000)
+    console.log("deltaSeconds", deltaSeconds)
+    const timeUnits = [
+      { unit: "day", seconds: 86400 },
+      { unit: "hour", seconds: 3600 },
+      { unit: "minute", seconds: 60 },
+      { unit: "second", seconds: 1 },
+    ]
+
+    for (const { unit, seconds } of timeUnits) {
+      const count = Math.floor(deltaSeconds / seconds)
+      console.log("count", count)
+      if (count > 0) {
+        return `${count} ${unit}${count > 1 ? "s" : ""} ago`
+      }
+    }
+    return "just now"
+  }
+
+  function updateTemplateFavouriteStatus(copyTemplateId, isFavourite) {
+    // isFavourite = !isFavourite
+    const formDataString = `templateId=${copyTemplateId}&isFavourite=${isFavourite}`
+    fetch("/account/api?/updateTemplateFavouriteStatus", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+      .then((response) => {
+        if (response.ok) {
+          fetchCopyTemplates(selectedCopyTypeId)
+
+          console.log("Template favourite status updated successfully")
+        } else {
+          console.error("Failed to update template favourite status")
+        }
+      })
+      .catch((error) => {
+        console.error("Error updating template favourite status:", error)
+      })
+  }
+
+  function updateEmailSequenceFavourite(
+    emailSequenceId,
+    emailSequenceFavourite,
+  ) {
+    // emailSequence.favourite = !emailSequence.favourite
+
+    const formDataString = `emailSequenceId=${emailSequenceId}&isFavourite=${emailSequenceFavourite}`
+    console.log("FORM DATA STRING", formDataString)
+
+    fetch("/account/api?/updateEmailSequenceFavouriteStatus", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+      .then((response) => {
+        if (response.ok) {
+          fetchUpdatedEmailSequences()
+        } else {
+          console.error("Failed to update email sequence favourite status")
+        }
+      })
+      .catch((error) => {
+        console.error("Error updating email sequence favourite status:", error)
+      })
+  }
+
+  async function showStarredSequences() {
+    showStarred = !showStarred
+    console.log("SHOW STARRED", showStarred)
+    if (showStarred) {
+      const formDataString = `isFavourite=${showStarred}`
+      try {
+        const response = await fetch("/account/api?/getFavouriteSequences", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formDataString,
+        })
+        if (response.ok) {
+          const result = await response.json()
+          const jsonData = JSON.parse(result.data)
+          console.log("JSON DATA", jsonData)
+          const jsonDataResult = JSON.parse(jsonData[2])
+          console.log("JSON DATA RESULT", jsonDataResult)
+          emailSequences.set(jsonDataResult)
+        } else {
+          console.error("Failed to update email sequence favourite status")
+        }
+      } catch (error) {
+        console.error("Error updating email sequence favourite status:", error)
+      }
+    } else {
+      fetchUpdatedEmailSequences()
+    }
   }
 </script>
 
@@ -863,24 +1229,41 @@
   <!-- {#if !reply && !isLoading && $showForm} -->
   {#if !isLoading && ($showForm || reply)}
     <div class="main-form-container">
-      <button
-        class="text-gray-700 hover:text-gray-900 py-1 px-2"
-        on:click={() => {
-          toggleHideForm()
-        }}>&larr; Back</button
-      >
+      <div class="flex justify-between items-center">
+        <button
+          class="btn btn-outline btn-sm py-1 px-2"
+          on:click={() => {
+            toggleHideForm()
+          }}>&larr; Back</button
+        >
+        <div class="space-x-1 mr-2">
+          <button
+            class="btn btn-outline btn-sm py-1 px-2"
+            on:click={() => {
+              openSaveResponseModal()
+            }}>Save Response</button
+          >
+          <button
+            class="btn btn-outline btn-sm py-1 px-2"
+            on:click={() => {
+              isLoadResponsesModalOpen = true
+
+              if ($savedResponses.length === 0 || fetchUpdatedResponses) {
+                loadResponses()
+              }
+            }}>Load Response</button
+          >
+        </div>
+      </div>
       <form
         id="create-form"
         on:submit|preventDefault={handleSubmit}
-        class="form-container"
+        class="form-container pt-4 pr-2"
       >
         {#each $formFields as field (field.key)}
           <div class="form-section">
             {#if field.type === "textarea" && !field.condition}
-              <label
-                class="block text-gray-700 text-sm font-bold mb-2"
-                for={field.key}
-              >
+              <label class="block text-gray-700 text-sm mb-2" for={field.key}>
                 {field.label}:
               </label>
               <textarea
@@ -893,10 +1276,7 @@
             {/if}
 
             {#if field.type === "select" && !field.condition}
-              <label
-                class="block text-gray-700 text-sm font-bold mb-2"
-                for={field.key}
-              >
+              <label class="block text-gray-700 text-sm mb-2" for={field.key}>
                 {field.label}:
               </label>
               <div class="relative">
@@ -904,12 +1284,15 @@
                   type="button"
                   class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
                   on:click={() => (field.showOptions = !field.showOptions)}
+                  on:blur={() => (field.showOptions = false)}
                 >
                   {formData[field.key] || "Select an option"}
                 </button>
                 {#if field.showOptions}
                   <div
                     class="absolute z-10 w-full bg-white border rounded shadow-lg"
+                    tabindex="0"
+                    on:mousedown|preventDefault
                   >
                     {#each field.options as option (option.value ? option.value : option)}
                       <div
@@ -941,10 +1324,7 @@
             {/if}
 
             {#if field.type === "number" && !field.condition}
-              <label
-                class="block text-gray-700 text-sm font-bold mb-2"
-                for={field.key}
-              >
+              <label class="block text-gray-700 text-sm mb-2" for={field.key}>
                 {field.label}:
               </label>
               <input
@@ -958,10 +1338,7 @@
 
             {#if field.condition}
               {#if formData[field.condition.dependsOn] === field.condition.value}
-                <label
-                  class="block text-gray-700 text-sm font-bold mb-2"
-                  for={field.key}
-                >
+                <label class="block text-gray-700 text-sm mb-2" for={field.key}>
                   {field.label}:
                 </label>
                 <select
@@ -995,6 +1372,49 @@
     </div>
 
     <div class="reply-container">
+      <div class="flex justify-between items-center mb-2">
+        <div class="text-xl">Output</div>
+        <div class="space-x-1 mr-2">
+          <button
+            on:click={copyToClipboard}
+            class="btn btn-outline btn-sm py-1 px-2"
+            disabled={!reply || isCopySuccessful}
+          >
+            {#if isCopySuccessful}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#ffffff"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><polyline points="20 6 9 17 4 12"></polyline></svg
+              >
+              Copied
+            {:else}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#000000"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><rect x="9" y="9" width="10" height="10" rx="2" ry="2"
+                ></rect><path
+                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                ></path></svg
+              >
+              Copy
+            {/if}
+          </button>
+        </div>
+      </div>
       <div class="textarea-container">
         <!-- <textarea
           id="replyTextArea"
@@ -1004,7 +1424,7 @@
         ></textarea> -->
         <div
           id="replyTextArea"
-          class="w-full p-2 border rounded-md focus:outline-none focus:shadow-outline overflow-auto h-[75vh]"
+          class="w-full p-2 border rounded-md focus:outline-none focus:shadow-outline overflow-auto h-[70vh]"
           style="white-space: pre-wrap"
         >
           {#if !isTyping}
@@ -1013,45 +1433,6 @@
             {displayedText}
           {/if}
         </div>
-
-        <button
-          on:click={copyToClipboard}
-          class="btn btn-outline copy-button"
-          disabled={!reply || isCopySuccessful}
-        >
-          {#if isCopySuccessful}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#ffffff"
-              stroke-width="1"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><polyline points="20 6 9 17 4 12"></polyline></svg
-            >
-            Copied
-          {:else}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#000000"
-              stroke-width="1"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              ><rect x="9" y="9" width="13" height="13" rx="2" ry="2"
-              ></rect><path
-                d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-              ></path></svg
-            >
-            Copy
-          {/if}
-        </button>
       </div>
       {#if currentEmailIndex != 0}
         <div class="button-container">
@@ -1186,7 +1567,34 @@
   {/if}
   {#if !reply && !isLoading && !$showForm && !isLoadingSequences}
     <div class="main-head">
-      <div class="search-box border-solid rounded border border-gray-300">
+      <div
+        class="search-box border-solid rounded border border-gray-300 flex items-center"
+      >
+        <button
+          title="Show All Starred"
+          class="tooltip tooltip-right pr-2"
+          data-tip="Show All Starred"
+          on:click={() => showStarredSequences()}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill={showStarred ? "currentColor" : "none"}
+            stroke="currentColor"
+            stroke-width="1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class={showStarred
+              ? "w-5 h-5 text-yellow-500 dark:text-yellow-400"
+              : "w-5 h-5 text-gray-500 dark:text-gray-400"}
+          >
+            <polygon
+              points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+            />
+          </svg>
+        </button>
         <input
           type="text"
           placeholder="Search your copy collections..."
@@ -1200,64 +1608,103 @@
             }
           }}
         />
-
-        {#if searchTerm.length >= 6}
-          <p>
-            There’s {resultsCount} copy collections matching “{searchTerm}”
-          </p>
-        {/if}
       </div>
+
       <div>
         <button class="btn btn-warning" on:click={openCopyTypeModal}
           >+ Create New</button
         >
       </div>
     </div>
+    <div class="w-full mt-2">
+      {#if searchTerm.length > 0 && searchTerm.length <= minChar}
+        <p>Minimum 6 characters</p>
+      {:else if searchTerm.length > minChar}
+        <p>
+          There’s {resultsCount} copy collections matching “{searchTerm}”
+        </p>
+      {/if}
+    </div>
 
-    {#if $isSelectionMode}
-      <div class="bulk-actions">
-        <button class="btn btn-outline text-base" on:click={selectAll}
-          >Select All</button
-        >
-        <button class="btn btn-outline text-base" on:click={cancelSelection}
-          >Cancel</button
+    <div class="w-full mt-2">
+      {#if $isSelectionMode}
+        <button
+          class="btn btn-outline btn-sm text-xs text-base"
+          on:click={selectAll}>Select All</button
         >
         <button
-          class="btn btn-outline text-base"
+          class="btn btn-outline btn-sm text-xs text-base"
+          on:click={cancelSelection}>Cancel</button
+        >
+        <button
+          class="btn btn-outline btn-sm text-xs text-base"
           on:click={() => {
             deletingSelectedSequences = true
             openSelectedDeleteModal()
           }}>Delete Selected</button
         >
-      </div>
-    {/if}
+      {/if}
+    </div>
 
     <!-- <button class="plus-sign" on:click={toggleShowForm}>+ New</button> -->
     <!-- <button class="plus-sign" on:click={openCopyTypeModal}>+ New</button> -->
-    <div class="main-list">
+    <div class="main-list pt-3">
       {#if $emailSequences.length > 0}
         {#each $emailSequences as emailSequence (emailSequence.id)}
           <div
             class="email-box border-solid rounded border border-gray-300 {$isSelectionMode
               ? 'hover-mode selection-mode'
-              : ''}"
+              : ''} flex items-start"
             on:mouseenter={() =>
               event.currentTarget.classList.add("hover-mode")}
             on:mouseleave={() =>
               event.currentTarget.classList.remove("hover-mode")}
           >
-            <input
-              type="checkbox"
-              class="select-checkbox"
-              checked={$selectedSequences.has(emailSequence.id)}
-              on:click={() => isSelectionMode.set(true)}
-              on:change={() => {
-                toggleSelection(emailSequence.id)
-                if (!$selectedSequences.size) {
-                  cancelSelection()
-                }
-              }}
-            />
+            <div class="flex flex-col h-full mr-2 mt-[5px]">
+              <button
+                class="p-0 mb-1"
+                title="Favourite"
+                on:click={() => {
+                  emailSequence.favourite = !emailSequence.favourite
+                  updateEmailSequenceFavourite(
+                    emailSequence.id,
+                    emailSequence.favourite,
+                  )
+                }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill={emailSequence.favourite ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  stroke-width="1"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class={emailSequence.favourite
+                    ? "w-4 h-4 text-yellow-500 dark:text-yellow-400"
+                    : "w-4 h-4 text-gray-500 dark:text-gray-400"}
+                >
+                  <polygon
+                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                  />
+                </svg>
+              </button>
+
+              <input
+                type="checkbox"
+                class="select-checkbox mt-1 p-0"
+                checked={$selectedSequences.has(emailSequence.id)}
+                on:click={() => isSelectionMode.set(true)}
+                on:change={() => {
+                  toggleSelection(emailSequence.id)
+                  if (!$selectedSequences.size) {
+                    cancelSelection()
+                  }
+                }}
+              />
+            </div>
             <span
               class="sequence-name"
               on:click={() => {
@@ -1277,8 +1724,16 @@
                 selectedCopyTemplateId = emailSequence.copy_template_id
                 // formFields.set(emailSequence.copy_form_data)
                 handleLoad()
-              }}>{emailSequence.name}</span
-            >
+              }}
+              >{emailSequence.name} ({emailSequence.favourite})
+              <br />
+              <p class="text-xs text-gray-500">
+                <span title={`${formatDate(emailSequence.updated_at)}`}>
+                  Last Updated {formatRelativeTime(emailSequence.updated_at)}
+                </span>
+              </p>
+            </span>
+
             <div class="actions">
               <!-- <button
               class="btn btn-outline"
@@ -1295,11 +1750,11 @@
               Open
             </button>  -->
               <button
-                class="btn btn-outline text-lg mr-2"
+                class="btn btn-outline text-lg mr-2 mb-1"
                 on:click={() => openRenameModal(emailSequence)}>Rename</button
               >
               <button
-                class="btn btn-outline text-lg `mr-2"
+                class="btn btn-outline text-lg mr-2 mb-1"
                 on:click={() => {
                   deletingSequence = true
                   openDeleteModal(emailSequence)
@@ -1308,7 +1763,7 @@
             </div>
           </div>
         {/each}
-      {:else}
+      {:else if !isSearching}
         <p class="mb-5">
           No collections found. <span
             on:click={openCopyTypeModal}
@@ -1344,12 +1799,21 @@
         Rename
       </p>
       <div class="border-2 rounded-md p-2">
-        <input class="text-neutral w-full" bind:value={newName} id="newName" />
+        <input
+          class="text-neutral w-full"
+          bind:value={newName}
+          id="newName"
+          on:keydown={(e) => {
+            if (e.key === "Enter") {
+              saveName()
+            }
+          }}
+        />
       </div>
       <ul>
         <li>
           <button
-            class="btn btn-success btn-wide"
+            class="btn btn-success btn-block"
             on:click={saveName}
             disabled={isSaving}
           >
@@ -1359,7 +1823,7 @@
 
         <li>
           <button
-            class="btn btn-wide"
+            class="btn btn-block"
             on:click={closeRenameModal}
             disabled={isSaving}
           >
@@ -1383,12 +1847,21 @@
         Edit Your Copy Collection
       </p>
       <div class="border-2 rounded-md p-2">
-        <input class="text-neutral w-full" bind:value={newName} id="newName" />
+        <input
+          on:keydown={(e) => {
+            if (e.key === "Enter") {
+              saveName()
+            }
+          }}
+          class="text-neutral w-full"
+          bind:value={newName}
+          id="newName"
+        />
       </div>
       <ul>
         <li>
           <button
-            class="btn btn-success btn-wide"
+            class="btn btn-success btn-block"
             on:click={saveName}
             disabled={isSaving}
           >
@@ -1398,7 +1871,7 @@
 
         <li>
           <button
-            class="btn btn-wide"
+            class="btn btn-block"
             on:click={closeStepModal}
             disabled={isSaving}
           >
@@ -1407,7 +1880,7 @@
         </li>
         <li>
           <button
-            class="btn btn-error btn-wide"
+            class="btn btn-error btn-block"
             on:click={() => {
               if (deleteConfirm) {
                 deleteEmailSequence()
@@ -1420,8 +1893,8 @@
             }}
             disabled={isSaving}
           >
-            {#if isSaving}Deleting...{:else if deleteConfirm}Confirm Delete?{:else}Delete
-              Collection{/if}
+            {#if isSaving && deleteConfirm}Deleting...{:else if deleteConfirm}Confirm
+              Delete?{:else}Delete Collection{/if}
           </button>
         </li>
       </ul>
@@ -1444,7 +1917,7 @@
       <ul>
         <li>
           <button
-            class="btn btn-error btn-wide"
+            class="btn btn-error btn-block"
             on:click={() => {
               if (deletingSequence) {
                 deleteEmailSequence()
@@ -1459,7 +1932,7 @@
         </li>
         <li>
           <button
-            class="btn btn-wide"
+            class="btn btn-block"
             on:click={closeDeleteModal}
             disabled={isSaving}
           >
@@ -1484,9 +1957,11 @@
       </p>
       <ul>
         {#each $copyTypes as type (type.id)}
-          <li>
+          <li
+            class="flex items-center justify-between rounded bg-secondary outline outline-1 outline-neutral-content pt-2 pb-2"
+          >
             <button
-              class="btn btn-secondary btn-wide normal-case"
+              class="flex-1 text-neutral"
               on:click={() => handleCopyTypeSelection(type)}
             >
               {type.name}
@@ -1494,7 +1969,8 @@
           </li>
         {/each}
       </ul>
-      <button class="btn btn-wide" on:click={closeCopyTypeModal}>Cancel</button>
+      <button class="btn btn-block" on:click={closeCopyTypeModal}>Cancel</button
+      >
     </div>
   </div>
 {/if}
@@ -1510,21 +1986,125 @@
       <p class="mt-2 mb-5 text-center text-xl font-semibold text-neutral">
         Select A Template
       </p>
+
+      <div
+        class="text-neutral border-solid rounded border border-gray-300 max-w-full flex-1 p-1 mb-2"
+      >
+        <input
+          type="text"
+          placeholder="Search templates..."
+          bind:value={searchTemplateTerm}
+          class="w-full"
+          on:input={() => {
+            if (searchTemplateTerm.length === 0) {
+              fetchCopyTemplates(selectedCopyTypeId)
+              isTemplateSearching = false
+            } else {
+              fetchTemplateResults()
+            }
+          }}
+        />
+
+        {#if searchTemplateTerm.length > 0 && searchTemplateTerm.length <= minChar}
+          <p>Minimum 6 characters</p>
+        {:else if searchTemplateTerm.length > minChar}
+          <p>
+            There’s {resultsTemplateCount} templates matching “{searchTemplateTerm}”
+          </p>
+        {/if}
+      </div>
+
       <ul>
         {#each $copyTemplates as template (template.id)}
-          <li>
+          <li
+            class="flex items-center justify-between rounded bg-secondary outline outline-1 outline-neutral-content pt-2 pb-2"
+          >
             <button
-              class="btn btn-secondary btn-wide normal-case"
+              class="pr-2 pl-3"
+              title="Favourite"
+              on:click={() => {
+                template.isFavourite = !template.isFavourite
+                updateTemplateFavouriteStatus(template.id, template.isFavourite)
+              }}
+            >
+              <svg
+                class="w-5 h-5 text-yellow-500 dark:text-yellow-400"
+                aria-hidden="true"
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill={template.isFavourite ? "currentColor" : "none"}
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon
+                  points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+                />
+              </svg>
+            </button>
+
+            <button
+              class="flex-1 text-neutral"
               on:click={() => handleCopyTemplateSelection(template)}
             >
               {template.name}
             </button>
+            <button
+              class="pr-2"
+              title="More info"
+              on:click={() => (template.showInfo = !template.showInfo)}
+            >
+              <svg
+                class="w-5 h-5 text-gray-800 dark:text-white"
+                aria-hidden="true"
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12Zm9.408-5.5a1 1 0 1 0 0 2h.01a1 1 0 1 0 0-2h-.01ZM10 10a1 1 0 1 0 0 2h1v3h-1a1 1 0 1 0 0 2h4a1 1 0 1 0 0-2h-1v-4a1 1 0 0 0-1-1h-2Z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </button>
+            <div class="tooltip fixed ml-2" data-tip="More info"></div>
+            {#if template.showInfo}
+              <div
+                class="absolute z-10 p-4 bg-white border rounded shadow-lg text-neutral text-sm w-[560px] max-w-[68vw] max-h-[500px] overflow-y-auto scrollbar-thin"
+              >
+                {template.info}
+                <button
+                  class="absolute top-0 right-0 mt-1 mr-1 flex items-center justify-center w-5 h-5 rounded-full bg-neutral text-white"
+                  on:click={() => (template.showInfo = false)}
+                >
+                  X
+                </button>
+              </div>
+            {/if}
           </li>
         {/each}
       </ul>
-      <button class="btn btn-wide" on:click={closeCopyTemplateModal}
-        >Cancel</button
-      >
+      <div class="flex w-full justify-between space-x-2">
+        <button class="btn flex-1" on:click={closeCopyTemplateModal}>
+          Cancel
+        </button>
+        <button
+          class="btn flex-1"
+          on:click={() => {
+            isCopyTemplateModalOpen = false
+            isCopyTypeModalOpen = true
+            searchTemplateTerm = ""
+          }}
+        >
+          Back
+        </button>
+      </div>
     </div>
   </div>
 {/if}
@@ -1550,6 +2130,124 @@
         on:click={closeUpgradeModal}>Upgrade</a
       >
       <button class="btn btn-wide" on:click={closeUpgradeModal}>Close</button>
+    </div>
+  </div>
+{/if}
+
+{#if isSaveResponseModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeSaveResponseModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <p class="mt-2 mb-4 text-center text-xl font-semibold text-neutral">
+        Save Your Response
+      </p>
+      <div class="border-2 rounded-md p-2">
+        <input
+          class="text-neutral w-full"
+          bind:value={responseName}
+          id="responseName"
+          placeholder="Enter name for saved response"
+          on:keydown={(e) => {
+            if (e.key === "Enter" && responseName) {
+              saveResponse()
+            }
+          }}
+        />
+      </div>
+      <ul>
+        <li>
+          <button
+            class="btn btn-success btn-block"
+            on:click={saveResponse}
+            disabled={isSaving || !responseName}
+          >
+            {#if isSaving}Saving...{:else}Save{/if}
+          </button>
+        </li>
+
+        <li>
+          <button
+            class="btn btn-block"
+            on:click={closeSaveResponseModal}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+{/if}
+{#if isLoadResponsesModalOpen}
+  <div
+    class="modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    on:click={closeLoadResponsesModal}
+  >
+    <div class="copy-type-modal" role="document" on:click|stopPropagation>
+      <p class="mt-2 mb-4 text-center text-xl font-semibold text-neutral">
+        Load Saved Responses
+      </p>
+      <ul>
+        {#each $savedResponses as response}
+          <li
+            class="flex items-center justify-between rounded outline outline-1 outline-neutral-content pt-2 pb-2"
+          >
+            <button
+              class="flex-1 text-neutral"
+              on:click={() => loadResponse(response)}
+            >
+              {response.name}
+            </button>
+
+            <button class="pr-2" on:click={() => deleteResponse(response)}>
+              <svg
+                class="w-4 h-4 text-gray-800 dark:text-white"
+                aria-hidden="true"
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M5 7h14m-9 3v8m4-8v8M10 3h4a1 1 0 0 1 1 1v3H9V4a1 1 0 0 1 1-1ZM6 7h12v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7Z"
+                />
+              </svg>
+            </button>
+          </li>
+        {/each}
+      </ul>
+      <button
+        class="btn btn-primary btn-block btn-sm mb-2"
+        on:click={loadMoreResponses}
+        disabled={!hasMoreResponses ||
+          isLoadingNewResponses ||
+          isSearchingResponses}
+      >
+        {#if !hasMoreResponses || isSearchingResponses}
+          No More Records
+        {:else}
+          {isLoadingNewResponses ? "Loading..." : "Show More"}
+        {/if}
+      </button>
+
+      <button
+        class="btn btn-block btn-sm"
+        on:click={closeLoadResponsesModal}
+        disabled={isSaving}
+      >
+        Close
+      </button>
     </div>
   </div>
 {/if}
@@ -1592,7 +2290,6 @@
     gap: 20px;
     max-width: 800px;
     margin: auto;
-    padding: 20px;
   }
 
   .form-section {
@@ -1626,7 +2323,6 @@
       width: 35%;
       max-height: 93vh;
       overflow-y: auto;
-      /* Beautify the scrollbar using Tailwind CSS */
       scrollbar-width: thin;
     }
     .main-form-container::-webkit-scrollbar {
@@ -1744,7 +2440,13 @@
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
     animation: scaleUp 0.3s ease;
-    max-width: 300px;
+    max-width: 80vw;
+    width: 600px;
+    /* width: 50vw; */
+    /* min-width: 300px;*/
+    max-height: 500px;
+    overflow-y: auto;
+    scrollbar-width: thin;
   }
   .main-content {
     will-change: filter;
@@ -1824,7 +2526,6 @@
     margin-bottom: 10px;
     position: relative;
     max-width: 100%;
-    align-items: center; /* Vertically centers child elements, including .sequence-name */
   }
 
   .email-box:hover .actions {
@@ -1834,7 +2535,7 @@
   .actions {
     display: none;
     position: absolute;
-    right: -20px;
+    right: -30px;
     top: 0px;
     scale: 0.5;
   }
@@ -1855,7 +2556,7 @@
     }
     .sequence-name {
       cursor: pointer;
-      max-width: 70%;
+      max-width: 71%;
     }
     .email-box {
       max-width: 100%;
@@ -1865,7 +2566,7 @@
 
   .bulk-actions {
     scale: 0.7;
-    margin-left: -3rem;
+    margin-left: 0;
     position: fixed;
   }
 
@@ -1876,24 +2577,23 @@
   @media (max-width: 768px) {
     .select-checkbox {
       display: inline-block;
-      margin-right: 20px;
+      /* margin-right: 20px; */
       margin-top: 2px;
     }
   }
 
   .hover-mode .select-checkbox {
     display: inline-block;
-    margin-right: 20px;
+    /* margin-right: 20px; */
     margin-top: 2px;
   }
 
   .selection-mode .select-checkbox {
     display: inline-block;
-    margin-right: 20px;
+    /* margin-right: 20px; */
     margin-top: 2px;
   }
   .main-list {
-    padding-top: 50px;
     width: 100%;
   }
 
