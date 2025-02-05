@@ -341,7 +341,7 @@ console.log("FORM JSON",formJson)
     formJsonInfo = JSON.stringify(formJsonInfo)
     
     
-    console.log("JSON INFO",formJsonInfo)
+    // console.log("JSON INFO",formJsonInfo)
     
 
     //format formJSON to jsonb for supabase
@@ -361,7 +361,7 @@ console.log("FORM JSON",formJson)
     
     const emailToRewrite = JSON.parse(formJson).emailToRewrite
     const wordCount = JSON.parse(formJson).wordCount
-    const steps = JSON.parse(formJson).numberOfEmails
+    const steps = JSON.parse(formJson).numberOfEmails ?? 1
     
 
 //FETCH PROMPT FROM DATABASE FOR CURRENT EMAIL IF IT EXISTS
@@ -428,15 +428,16 @@ console.log("DATABASE RESULT",currentEmailData)
        throw new Error('Error fetching copy type prompts')
      }
 
-     modelInstructions = copyTemplatePromptsData.system_prompt
+     modelInstructions = copyTemplatePromptsData.system_prompt.replace("${jsonResponse}", formJson)
      firstPrompt = copyTemplatePromptsData.first_prompt.replace("${wordCount}", wordCount)
      nextPrompt = copyTemplatePromptsData.next_prompt.replace("${currentEmailIndex}", currentEmailIndex).replace("${wordCount}", wordCount).replace("${steps}", steps)
      requiredCredits = Number(copyTemplatePromptsData.credits)
   
+     const escapedmodelInstructions = modelInstructions
+    //  .replace(/[\n\r]/g, ' ').replace(/"/g, '\\"').replace(/&/g, '\\&');
 
 
-
-   console.log("MODEL INSTRUCTIONS",modelInstructions)
+   console.log("MODEL INSTRUCTIONS",escapedmodelInstructions)
    console.log("FIRST PROMPT",firstPrompt)
    console.log("NEXT PROMPT",nextPrompt)
    console.log("REQUIRED CREDITS",requiredCredits)
@@ -444,16 +445,25 @@ console.log("DATABASE RESULT",currentEmailData)
 
 if (currentEmailIndex==1 && !newEmailId) {
   console.log("WE ARE HERE CREATING THE NEW PROMPT")
-    promptA = `[{"role": "user", "content": "${firstPrompt
-      .replace(/\n/g, "\\n")
-      .replace(/&/g, "\\&")
-      .replace(/"/g, '\\"')
-      .replace(
-        /\u00A0/g,
-        " ",
-      )} ${emailToRewrite.replace(/\n/g, "\\n")}" }]`
 
-      
+ const escapedFirstPrompt = JSON.stringify(firstPrompt).slice(1, -1); // Remove the surrounding quotes
+  // .replace(/[\n\r]/g, ' ').replace(/"/g, '\\"').replace(/&/g, '\\&');
+  promptA = `[{"role": "user", "content": "${escapedFirstPrompt}"}]`;
+
+
+  // promptA = `[{"role": "user", "content": "${firstPrompt}"}]` 
+
+    // promptA = `[{"role": "user", "content": "${firstPrompt
+    //   .replace(/\n/g, "\\n")
+    //   .replace(/&/g, "\\&")
+    //   .replace(/"/g, '\\"')
+    //   .replace(
+    //     /\u00A0/g,
+    //     " ",
+    //   )} ${emailToRewrite.replace(/\n/g, "\\n")}" }]`
+
+      console.log("CHECK FIRST PROMPT",promptA)
+
       prompt = JSON.parse(promptA)
 console.log("CHECK NEW PROMPT",prompt)
 
@@ -461,6 +471,7 @@ console.log("CHECK NEW PROMPT",prompt)
   console.log("WE ARE HERE CREATING THE NEXT PROMPT")
 
   // nextPrompt = `Write email # ${currentEmailIndex} of ${wordCount}`
+  
 
   promptA = `[${prompt},{"role": "assistant", "content": "${reply
     .replace(/\n/g, "\\n")
@@ -503,7 +514,7 @@ if (error) {
     try {
       const message = await anthropic.messages.create({
         max_tokens: 1024,
-        system: modelInstructions,
+        system: escapedmodelInstructions,
         messages: prompt,
         model: 'claude-3-5-haiku-latest',
       });

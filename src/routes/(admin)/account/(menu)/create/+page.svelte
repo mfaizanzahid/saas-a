@@ -570,6 +570,7 @@
       return
     }
     if (isNewGenerate) {
+      console.log("NEW GENERATION---------------------")
       hasMoreRecords = true
       currentEmailIndex = 1
       currentEmailId = ""
@@ -1284,25 +1285,41 @@
       <form
         id="create-form"
         on:submit|preventDefault={handleSubmit}
-        class="form-container pt-4 pr-2"
+        class="form-container pt-4 pr-2 text-xs"
       >
         {#each $formFields as field (field.key)}
-          <div class="form-section">
+          <div
+            class="form-section border-base-200 bg-base-100 border rounded-xl p-2"
+          >
             {#if field.type === "textarea" && !field.condition}
-              <label class="block text-gray-700 text-sm mb-2" for={field.key}>
-                {field.label}:
-              </label>
+              <div tabindex="0" class="collapse collapse-arrow bg-base-100">
+                <div
+                  class="collapse-title text-xs font-bold pl-2 pr-3 pt-0 pb-0 min-h-[0.2rem]"
+                  for={field.key}
+                >
+                  {field.label}
+                </div>
+                <div class="collapse-content p-2">
+                  <p>{field.info}</p>
+                </div>
+              </div>
               <textarea
                 bind:value={formData[field.key]}
                 id={field.key}
-                class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-                rows={field.attributes?.rows}
-                maxlength={field.attributes?.maxlength}
+                class="w-full mt-2 p-2 border rounded-xl focus:outline-none focus:shadow-outline"
+                rows="4"
+                maxlength={field.maxlength}
+                minlength={field.minlength}
+                required={field.required}
+                placeholder={field.value}
               ></textarea>
             {/if}
 
             {#if field.type === "select" && !field.condition}
-              <label class="block text-gray-700 text-sm mb-2" for={field.key}>
+              <label
+                class="block font-bold text-gray-700 text-xs mb-2"
+                for={field.key}
+              >
                 {field.label}:
               </label>
               <div class="relative">
@@ -1311,6 +1328,7 @@
                   class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
                   on:click={() => (field.showOptions = !field.showOptions)}
                   on:blur={() => (field.showOptions = false)}
+                  required={field.required}
                 >
                   {formData[field.key] || "Select an option"}
                 </button>
@@ -1339,18 +1357,22 @@
             {/if}
 
             {#if field.type === "checkbox" && !field.condition}
-              <label class="block mt-4" for={field.key}>
+              <label class="block mt-4 font-bold text-xs" for={field.key}>
                 <input
                   type="checkbox"
                   bind:checked={formData[field.key]}
                   class="mr-2"
+                  required={field.required}
                 />
                 {field.label}
               </label>
             {/if}
 
             {#if field.type === "number" && !field.condition}
-              <label class="block text-gray-700 text-sm mb-2" for={field.key}>
+              <label
+                class="block font-bold text-gray-700 text-xs mb-2"
+                for={field.key}
+              >
                 {field.label}:
               </label>
               <input
@@ -1358,19 +1380,25 @@
                 bind:value={formData[field.key]}
                 id={field.key}
                 class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
-                max={field.attributes?.max}
+                max={field.maxlength}
+                min={field.minlength}
+                required={field.required}
               />
             {/if}
 
             {#if field.condition}
               {#if formData[field.condition.dependsOn] === field.condition.value}
-                <label class="block text-gray-700 text-sm mb-2" for={field.key}>
+                <label
+                  class="block font-bold text-gray-700 text-xs mb-2"
+                  for={field.key}
+                >
                   {field.label}:
                 </label>
                 <select
                   bind:value={formData[field.key]}
                   id={field.key}
                   class="w-full p-2 border rounded focus:outline-none focus:shadow-outline"
+                  required={field.required}
                 >
                   {#each field.options as option (option)}
                     <option value={option}>{option}</option>
@@ -1397,7 +1425,7 @@
       </form>
     </div>
 
-    <div class="reply-container">
+    <div class="reply-container mt-5 lg:mt-0">
       <div class="flex justify-between items-center mb-2">
         <div class="text-xl">Output</div>
         <div class="space-x-1 mr-2">
@@ -2048,7 +2076,7 @@
             class="flex items-center justify-between rounded bg-secondary outline outline-1 outline-neutral-content pt-2 pb-2"
           >
             <button
-              class="pr-2 pl-3"
+              class="pl-3"
               title="Favourite"
               on:click={() => {
                 template.isFavourite = !template.isFavourite
@@ -2081,8 +2109,8 @@
               {template.name}
             </button>
             <button
-              class="pr-2"
-              title="More info"
+              class="tooltip pr-4"
+              data-tip="More info"
               on:click={() => (template.showInfo = !template.showInfo)}
             >
               <svg
