@@ -122,6 +122,7 @@
 
   let copyTemplates = writable([])
   let selectedCopyTypeId = null
+  let selectedCopyTypeWordCount
   let selectedCopyTemplate = null
   let selectedCopyTemplateId = null
   let selectedCopyTemplateForm = null
@@ -159,6 +160,9 @@
   function loadResponse(response) {
     // Fetch response value from response
     let formResponse = response.response
+
+    //set formData to empty
+    formData = {}
 
     // Set formData to formResponse
     formData = formResponse
@@ -331,6 +335,8 @@
       copyTemplates.set([])
       selectedCopyType = type.name
       selectedCopyTypeId = type.id
+      selectedCopyTypeWordCount = type.word_count_options
+
       fetchCopyTemplates(selectedCopyTypeId)
     }
     isCopyTypeModalOpen = false
@@ -338,12 +344,23 @@
   }
 
   function handleCopyTemplateSelection(template) {
+    console.log("CURRENT FORM FIELDS", $formFields)
+
     selectedCopyTemplate = template.name
     selectedCopyTemplateId = template.id
     selectedCopyTemplateForm = template.form_data
+
     // selectedCopyTemplateForm = JSON.stringify(selectedCopyTemplateForm)
 
-    formFields.set(selectedCopyTemplateForm)
+    formFields.set([selectedCopyTypeWordCount, ...selectedCopyTemplateForm])
+
+    //add selectedCopyTypeWordCount to formFields in first position
+
+    // //add selectedCopyTypeWordCount to formFields
+    // formFields.update((fields) => {
+    //   fields.push({ ...selectedCopyTypeWordCount })
+    //   return fields
+    // })
 
     isCopyTemplateModalOpen = false
 
@@ -552,6 +569,8 @@
     isNewGenerate = true
 
     await handleGenerate()
+
+    isNewGenerate = false
   }
 
   async function handleGenerate() {
@@ -611,6 +630,7 @@
       json: JSON.stringify({ ...formData }),
       reply: reply,
       copyType: selectedCopyType,
+      copyTypeId: selectedCopyTypeId,
       copyTemplate: selectedCopyTemplate,
       copyTemplateId: selectedCopyTemplateId,
       previousEmailId: previousEmailId,
@@ -689,7 +709,7 @@
     console.log("EMAIL ID", currentEmailId)
     console.log("EMAIL SEQ", currentEmailSequenceId)
     console.log("LOADED COPY TYPE", selectedCopyType)
-    const formDataString = `selectedCopyTemplateId=${selectedCopyTemplateId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
+    const formDataString = `selectedCopyTypeId=${selectedCopyTypeId}&selectedCopyTemplateId=${selectedCopyTemplateId}&emailSequenceId=${currentEmailSequenceId}&currentEmailIndex=${currentEmailIndex}`
 
     try {
       const response = await fetch("/account/api?/loadEmail", {
@@ -710,9 +730,12 @@
         nextEmailId = jsonData[5]
         currentEmailId = jsonData[6]
         selectedCopyTemplateForm = jsonData[7]
+        selectedCopyTypeWordCount = jsonData[8]
         //convert from array to object
         selectedCopyTemplateForm = JSON.parse(selectedCopyTemplateForm)
         console.log("SELECTED COPY TEMPLATE FORM", selectedCopyTemplateForm)
+        selectedCopyTypeWordCount = JSON.parse(selectedCopyTypeWordCount)
+        console.log("SELECTED COPY TYPE WORD COUNT", selectedCopyTypeWordCount)
         // prompt = jsonData[7]
 
         reply = replyValue
@@ -733,7 +756,7 @@
       console.error("Error contacting Anthropic API:", error)
       // Handle error appropriately
     } finally {
-      formFields.set(selectedCopyTemplateForm)
+      formFields.set([selectedCopyTypeWordCount, ...selectedCopyTemplateForm])
       isLoading = false
     }
   }
@@ -885,6 +908,7 @@
     previousEmailId = null
     nextEmailId = null
     formData = {}
+    formFields.set([])
     fetchUpdatedEmailSequences()
     showForm.set(false)
   }
@@ -1307,7 +1331,7 @@
                 bind:value={formData[field.key]}
                 id={field.key}
                 class="w-full mt-2 p-2 border rounded-xl focus:outline-none focus:shadow-outline"
-                rows="4"
+                rows={field.rows ? field.rows : 3}
                 maxlength={field.maxlength}
                 minlength={field.minlength}
                 required={field.required}
@@ -1773,6 +1797,7 @@
                 formData = emailSequence.copy_info
 
                 selectedCopyType = emailSequence.copy_type
+                selectedCopyTypeId = emailSequence.copy_type_id
                 selectedCopyTemplate = emailSequence.copy_template
                 selectedCopyTemplateId = emailSequence.copy_template_id
                 // formFields.set(emailSequence.copy_form_data)

@@ -281,8 +281,18 @@ export const actions = {
   generateReply: async ({ request, locals: {  supabase, getSession, supabaseServiceRole } }) => {
 console.log("WE ARE IN THE BACKEND GENERATE")
 
-let requiredCredits,prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",promptAdd="",fetchPromptEmailIndex,currentEmailSequenceName=''
+const session = await getSession();
+const userId = session?.user.id
+// console.log("SESSION DETAILS",session)
+if (!session) {
+  return {
+    status: 401,
+    body: { errorMessage: 'User not authenticated' },
+  };
+}
 
+let requiredCredits,prompt="",promptA="",nextPrompt="",modelInstructions="",firstPrompt="",promptAdd="",fetchPromptEmailIndex,currentEmailSequenceName=''
+let previousPrompt
 
     const formData = await request.formData()
 
@@ -293,6 +303,7 @@ let requiredCredits,prompt="",promptA="",nextPrompt="",modelInstructions="",firs
     
 
     const copyType = formData.get("copyType");
+    const copyTypeId = formData.get("copyTypeId");
     const copyTemplate = formData.get("copyTemplate");
     const copyTemplateId = formData.get("copyTemplateId");
   
@@ -315,21 +326,21 @@ let requiredCredits,prompt="",promptA="",nextPrompt="",modelInstructions="",firs
     
     // const formData = await request.json(); // Assuming the request data is sent as JSON
     let formJson=formData.get("json")
-    if(newEmailSequenceId){
-      const {data,error} = await supabase
-      .from('copy_collection')
-      .select('copy_info')
-      .eq('id',newEmailSequenceId)
-      .single()
-      if(error){
-        console.error('Error fetching email sequence:', error);
-        throw new Error('Error fetching email sequence');
-      }
-      formJson=data.copy_info
-      //format formJSON to json
-      formJson = JSON.stringify(formJson)
+    // if(newEmailSequenceId){
+    //   const {data,error} = await supabase
+    //   .from('copy_collection')
+    //   .select('copy_info')
+    //   .eq('id',newEmailSequenceId)
+    //   .single()
+    //   if(error){
+    //     console.error('Error fetching email sequence:', error);
+    //     throw new Error('Error fetching email sequence');
+    //   }
+    //   formJson=data.copy_info
+    //   //format formJSON to json
+    //   formJson = JSON.stringify(formJson)
 
-    }
+    // }
    
 console.log("FORM JSON",formJson)
 
@@ -346,7 +357,8 @@ console.log("FORM JSON",formJson)
 
     //format formJSON to jsonb for supabase
     let formJsonU = formJson.replace(/'|\\/g, '').replace(/"{/g, '{').replace(/}"/g, '}');
-    formJsonU = JSON.parse(formJsonU)
+    // formJsonU = JSON.parse(formJsonU)
+    formJsonU = JSON.parse(formJson)
 
     // let copyTemplateForm = formData.get("copyTemplateForm");
     // copyTemplateForm = copyTemplateForm.replace(/'|\\/g, '').replace(/"{/g, '{').replace(/}"/g, '}');
@@ -386,8 +398,8 @@ try {
 
 console.log("DATABASE RESULT",currentEmailData)
 
-  prompt = currentEmailData[0]?.prompt;
-  console.log ("FETCHED CURRENT PROMPT",prompt)
+  previousPrompt = currentEmailData[0]?.prompt;
+  console.log ("FETCHED CURRENT PROMPT",previousPrompt)
 
   if (currentEmailError) {
     console.error('Error fetching current prompt:', currentEmailError);
@@ -406,15 +418,23 @@ console.log("DATABASE RESULT",currentEmailData)
     // console.log("PROMPTA",promptA)
     // const prompt = JSON.parse(promptA)
     // console.log("PROMPT",prompt)
-    const session = await getSession();
-    const userId = session?.user.id
-    // console.log("SESSION DETAILS",session)
-    if (!session) {
-      return {
-        status: 401,
-        body: { errorMessage: 'User not authenticated' },
-      };
+
+    //Fetch instructions from copy_types table
+    // Fetch copy type prompts
+    const { data: copyTypeInstructionsData, error: copyTypeInstructionsError } = await supabase
+    .from('copy_types') 
+    .select('instructions')
+    .eq('id', copyTypeId)
+    .single();
+
+    if (copyTypeInstructionsError) {
+      console.error('Error fetching copy type prompts:', copyTypeInstructionsError)
+      throw new Error('Error fetching copy type prompts')
     }
+
+    const copyTypeInstructions = copyTypeInstructionsData.instructions.replace("{{jsonResponse}}", formJson)
+    
+  
 
      // Fetch copy template prompts
      const { data: copyTemplatePromptsData, error: copyTypeError } = await supabase
@@ -428,12 +448,14 @@ console.log("DATABASE RESULT",currentEmailData)
        throw new Error('Error fetching copy type prompts')
      }
 
-     modelInstructions = copyTemplatePromptsData.system_prompt.replace("${jsonResponse}", formJson)
-     firstPrompt = copyTemplatePromptsData.first_prompt.replace("${wordCount}", wordCount)
-     nextPrompt = copyTemplatePromptsData.next_prompt.replace("${currentEmailIndex}", currentEmailIndex).replace("${wordCount}", wordCount).replace("${steps}", steps)
+     modelInstructions = copyTemplatePromptsData.system_prompt
+     firstPrompt = copyTemplatePromptsData.first_prompt.replace("{{wordCount}}", wordCount)
+     nextPrompt = copyTemplatePromptsData.next_prompt?.replace("{{currentEmailIndex}}", currentEmailIndex).replace("{{wordCount}}", wordCount).replace("${steps}", steps) ?? ""
      requiredCredits = Number(copyTemplatePromptsData.credits)
   
-     const escapedmodelInstructions = modelInstructions
+   const escapedmodelInstructions = `${copyTypeInstructions}
+   \n\n
+   ${modelInstructions}`
     //  .replace(/[\n\r]/g, ' ').replace(/"/g, '\\"').replace(/&/g, '\\&');
 
 
@@ -443,12 +465,22 @@ console.log("DATABASE RESULT",currentEmailData)
    console.log("REQUIRED CREDITS",requiredCredits)
 
 
-if (currentEmailIndex==1 && !newEmailId) {
+// if (currentEmailIndex==1 && !newEmailId) {
+  if (currentEmailIndex==1) {
   console.log("WE ARE HERE CREATING THE NEW PROMPT")
+
+
 
  const escapedFirstPrompt = JSON.stringify(firstPrompt).slice(1, -1); // Remove the surrounding quotes
   // .replace(/[\n\r]/g, ' ').replace(/"/g, '\\"').replace(/&/g, '\\&');
-  promptA = `[{"role": "user", "content": "${escapedFirstPrompt}"}]`;
+
+
+  // promptA = `[{"role": "user", "content": "${escapedFirstPrompt}"}]`
+
+    // promptA = `[{"role": "user", "content": [{"type": "text","text": "${escapedFirstPrompt}"}]},
+    // {"role": "assistant","content": [{"type": "text","text": "<headlines></headlines><ctas></ctas><ad_copy></ad_copy>"}]}]`
+
+  promptA = `[{"role": "user", "content": [{"type": "text","text": "${escapedFirstPrompt}"}]}]`
 
 
   // promptA = `[{"role": "user", "content": "${firstPrompt}"}]` 
@@ -473,7 +505,7 @@ console.log("CHECK NEW PROMPT",prompt)
   // nextPrompt = `Write email # ${currentEmailIndex} of ${wordCount}`
   
 
-  promptA = `[${prompt},{"role": "assistant", "content": "${reply
+  promptA = `[${previousPrompt},{"role": "assistant", "content": "${reply
     .replace(/\n/g, "\\n")
     .replace(/&/g, "\\&")
     .replace(/"/g, '\\"')
@@ -487,12 +519,13 @@ console.log("CHECK NEW PROMPT",prompt)
 
     prompt = JSON.parse(promptA)
    
-} else if (currentEmailIndex==1 && newEmailId) {
+} 
+// else if (currentEmailIndex==1 && newEmailId) {
   
-  promptA=`[${prompt}]`
-  prompt = JSON.parse(promptA)
-  console.log("USING EXISTING PROMPT",prompt)
-}
+//   promptA=`[${previousPrompt}]`
+//   prompt = JSON.parse(promptA)
+//   console.log("USING EXISTING PROMPT",prompt)
+// }
 
 
 
@@ -510,13 +543,19 @@ if (error) {
   throw new Error('Error fetching current user credits');
 }
 
+
+
 //GENERATE COPY
     try {
       const message = await anthropic.messages.create({
-        max_tokens: 1024,
+        max_tokens: 8000,
         system: escapedmodelInstructions,
         messages: prompt,
         model: 'claude-3-5-haiku-latest',
+        // model: 'claude-3-5-sonnet-latest',
+        
+
+
       });
       console.log("ANTHROPIC MESSAGEEE EEEEEEEEEEEEE",message)
 
@@ -588,7 +627,12 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
         // Create a new email sequence
         
         if (!newEmailSequenceId) {
-          currentEmailSequenceName = reply.match(/^[^,.;\(\n]+/)[0]
+          
+          // currentEmailSequenceName = reply.match(/^[^,.;\(\n]+/)[0]
+        const date = new Date();
+        currentEmailSequenceName = `${copyTemplate} - ${date.toLocaleString()}`;
+
+
           // currentEmailSequenceName = reply.slice(0, 50)
         const { data: newEmailSequence, error: sequenceError } = await supabase
           .from('copy_collection')
@@ -599,6 +643,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
               steps:steps,
               word_count: wordCount,
               copy_type:copyType,
+              copy_type_id:copyTypeId,
               copy_template:copyTemplate,
               copy_template_id:copyTemplateId,
               copy_info: formJsonU,
@@ -700,6 +745,16 @@ if (emailSequenceError) {
 
   loadEmail: async ({ request, locals: {  supabase, getSession } }) => {
 
+    const session = await getSession();
+    const userId = session?.user.id
+    // console.log("SESSION DETAILS",session)
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
     const formData = await request.formData()
     // const formData = await request.json(); // Assuming the request data is sent as JSON
 
@@ -710,7 +765,21 @@ if (emailSequenceError) {
 
     const currentEmailSequenceId = Number(formData.get("emailSequenceId"))
     const currentEmailIndex = Number(formData.get("currentEmailIndex"))
+    const selectedCopyTypeId = Number(formData.get("selectedCopyTypeId"))
     const selectedCopyTemplateId = Number(formData.get("selectedCopyTemplateId"))
+
+    //fetch word_count_options from copy_types table
+    const { data: copyTypeData, error: copyTypeError } = await supabase
+    .from('copy_types')
+    .select('word_count_options')
+    .eq('id', selectedCopyTypeId)
+    .single();
+
+    if (copyTypeError) {
+      console.error('Error fetching copy type data:', copyTypeError);
+      throw new Error('Error fetching copy type data');
+    }
+
 
     //fetch form_data from copy_templates table
     const { data: copyTemplateData, error: copyTemplateError } = await supabase
@@ -727,6 +796,7 @@ if (emailSequenceError) {
     // const formDataJson = copyTemplateData.form_data
     //stringify form_data
     const formDataJson = JSON.stringify(copyTemplateData.form_data)
+    const wordCountOptionsJson = JSON.stringify(copyTypeData.word_count_options)
     console.log("FETCHED FORM DATA",formDataJson)
 
 
@@ -734,22 +804,13 @@ if (emailSequenceError) {
     let currentEmail, previousEmailId, nextEmailId, currentEmailId,currentPrompt;
    
     
-    const session = await getSession();
-    const userId = session?.user.id
-    // console.log("SESSION DETAILS",session)
-    if (!session) {
-      return {
-        status: 401,
-        body: { errorMessage: 'User not authenticated' },
-      };
-    }
 
 
     try {
       // ... (existing code)
 
       // Save the generated content to the user's profile in Supabase
-      const { currentEmail,previousEmailId,nextEmailId,currentEmailId,currentPrompt } = await loadEmailA();
+      const { currentEmail,previousEmailId,nextEmailId,currentEmailId } = await loadEmailA();
 
       console.log('FETCHED REPLY------',currentEmail)
       console.log("PREVIOUS EMAIL ID------",previousEmailId)
@@ -758,7 +819,7 @@ if (emailSequenceError) {
       
    return {
     status: 200,
-    body: { reply: currentEmail, previousEmailId:previousEmailId, nextEmailId:nextEmailId, currentEmailId:currentEmailId, currentForm:formDataJson},
+    body: { reply: currentEmail, previousEmailId:previousEmailId, nextEmailId:nextEmailId, currentEmailId:currentEmailId, currentForm:formDataJson, wordCountOptions:wordCountOptionsJson},
   }
       
 
@@ -871,7 +932,7 @@ console.log("SEARCH SEQUENCE TERM",searchTerm)
       
       const { data: emailSequences, error } = await supabase
         .from('copy_collection')
-        .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_template,copy_template_id,copy_info,copy_form_data,favourite')
+        .select('id,name,created_at,updated_at,steps,word_count,copy_type,copy_type_id,copy_template,copy_template_id,copy_info,copy_form_data,favourite')
         .eq('user_id', userId)
         .ilike('name', `%${searchTerm || ''}%`)
         .order('updated_at', { ascending: false })
@@ -916,7 +977,7 @@ console.log("SEARCH SEQUENCE TERM",searchTerm)
       // Fetch email sequences for the logged-in user
       const { data: copyTypes, error } = await supabase
       .from('copy_types')
-      .select('id, name');
+      .select('id, name,word_count_options');
         console.log("FETCHED COPY TYPES",copyTypes)
         
       if (error) {
