@@ -14,6 +14,7 @@
   export let data
   let customerCredits = data.customerCredits
   let totalCredits = data.totalCredits
+  let customerPlan = data.customerPlan
 
   function closeDrawer(): void {
     document.getElementById("admin-drawer").checked = false
@@ -194,7 +195,12 @@
           Settings
         </a>
       </li>
+
       <li class="mt-auto">
+        <span class="mt-auto text-base">
+          Current Plan: {customerPlan}
+        </span>
+
         <span class="mt-auto text-base">
           <a href="/account/billing">
             Credits Remaining: {customerCredits} / {totalCredits}

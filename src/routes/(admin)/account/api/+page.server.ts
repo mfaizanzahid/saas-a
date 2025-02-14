@@ -373,6 +373,7 @@ console.log("FORM JSON",formJson)
     
     const emailToRewrite = JSON.parse(formJson).emailToRewrite
     const wordCount = JSON.parse(formJson).wordCount
+    const productName = JSON.parse(formJson).product_name
     const steps = JSON.parse(formJson).numberOfEmails ?? 1
     
 
@@ -448,7 +449,7 @@ console.log("DATABASE RESULT",currentEmailData)
        throw new Error('Error fetching copy type prompts')
      }
 
-     modelInstructions = copyTemplatePromptsData.system_prompt
+     modelInstructions = copyTemplatePromptsData.system_prompt.replace("{{jsonResponse}}", formJson)
      firstPrompt = copyTemplatePromptsData.first_prompt.replace("{{wordCount}}", wordCount)
      nextPrompt = copyTemplatePromptsData.next_prompt?.replace("{{currentEmailIndex}}", currentEmailIndex).replace("{{wordCount}}", wordCount).replace("${steps}", steps) ?? ""
      requiredCredits = Number(copyTemplatePromptsData.credits)
@@ -626,11 +627,11 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
       try {
         // Create a new email sequence
         
-        if (!newEmailSequenceId) {
+        // if (!newEmailSequenceId) {
           
           // currentEmailSequenceName = reply.match(/^[^,.;\(\n]+/)[0]
         const date = new Date();
-        currentEmailSequenceName = `${copyTemplate} - ${date.toLocaleString()}`;
+        currentEmailSequenceName = `${productName} (${copyTemplate} - ${copyType}) - ${date.toLocaleString()}`;
 
 
           // currentEmailSequenceName = reply.slice(0, 50)
@@ -639,6 +640,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
           .upsert([
             {
               user_id: userId,
+              updated_at: new Date(),
               name:currentEmailSequenceName,
               steps:steps,
               word_count: wordCount,
@@ -661,22 +663,22 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
           console.error('Error creating email sequence:', sequenceError);
           throw new Error('Error creating email sequence');
         }
-      } else {
+//       } else {
         
-        updatedEmailSequenceId=newEmailSequenceId
-//update update_at field for emailSequenceId in copy_collection table
-const { data: emailSequenceData, error: emailSequenceError } = await supabaseServiceRole
-  .from('copy_collection')
-  .update({ updated_at: new Date() })
-  .eq('id', newEmailSequenceId)
-  .select();
+//         updatedEmailSequenceId=newEmailSequenceId
+// //update update_at field for emailSequenceId in copy_collection table
+// const { data: emailSequenceData, error: emailSequenceError } = await supabaseServiceRole
+//   .from('copy_collection')
+//   .update({ updated_at: new Date() })
+//   .eq('id', newEmailSequenceId)
+//   .select();
 
-if (emailSequenceError) {
-  console.error('Error updating email sequence:', emailSequenceError);
-  throw new Error('Error updating email sequence');
-}
+// if (emailSequenceError) {
+//   console.error('Error updating email sequence:', emailSequenceError);
+//   throw new Error('Error updating email sequence');
+// }
 
-      }
+//       }
        
         // Add a new email linked to the created email_sequence
         console.log("NEW EMAIL IDDDDDDD",newEmailId)
@@ -977,7 +979,9 @@ console.log("SEARCH SEQUENCE TERM",searchTerm)
       // Fetch email sequences for the logged-in user
       const { data: copyTypes, error } = await supabase
       .from('copy_types')
-      .select('id, name,word_count_options');
+      .select('id, name,word_count_options')
+      .eq('active', true)
+      .order('updated_at', { ascending: false });
         console.log("FETCHED COPY TYPES",copyTypes)
         
       if (error) {
@@ -1027,8 +1031,9 @@ console.log("SEARCH SEQUENCE TERM",searchTerm)
       .from('copy_templates')
       .select('id, name, form_data, info')
       .eq('copy_type_id', copyTypeId)
+      .eq('active', true)
       .ilike('name', `%${searchTerm || ''}%`)
-      .order('created_at', { ascending: false });
+      .order('updated_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching copy templates', error);
@@ -1237,25 +1242,27 @@ console.log("DELETED SEQUENCE",data)
    
 
 
-    console.log("SAVE NAME FORM DATAAAA",formData)
+    // console.log("SAVE NAME FORM DATAAAA",formData)
+
 
     const responseName =formData.get("responseName") as string
     let response = formData.get("response")
     response = JSON.parse(response)
 
-    console.log("RESPONSE",response)
-    console.log("RESPONSE NAME",responseName)
+    // console.log("RESPONSE",response)
+    console.log("ADDING RESPONSE NAME",responseName)
 
     //save response in user_responses table
     const { data, error } = await supabase
-      .from("user_responses")
-      .insert([
-        {
-          user_id: userId,
-          response: response,
-          name: responseName,
-        },
-      ])
+    .from("user_responses")
+    .upsert(
+      {
+        user_id: userId,
+        response: response,
+        name: responseName,
+      },
+      { onConflict: ['name'] } // Ensure the conflict is handled on name
+    );
 
     if (error) {
       console.error('Error saving response:', error);
@@ -1477,7 +1484,7 @@ console.log("FETCHED RESPONSES",data)
                 .eq("favourite", isFavourite)
                 .order('updated_at', { ascending: false });
 
-                console.log("FETCHED FAVOURITE SEQUENCES",data)
+                // console.log("FETCHED FAVOURITE SEQUENCES",data)
               if (error) {
                 console.error('Error fetching favourite email sequences:', error);
                 throw new Error('Error fetching favourite email sequences');
@@ -1494,7 +1501,42 @@ console.log("FETCHED RESPONSES",data)
               };
             }
           },
-
+          filterByCopyType: async ({ request, locals: { supabase, getSession } }) => {
+            const session = await getSession();
+            const userId = session?.user.id;
+            if (!session) {
+              return {
+                status: 401,
+                body: { errorMessage: 'User not authenticated' },
+              };
+            }
+            const formData = await request.formData();
+            console.log("FILTER BY TYPE FORM DATAAAA",formData)
+            const filterCopyTypeId = formData.get("filterCopyTypeId");
+            try {
+              const { data, error } = await supabase
+                .from("copy_collection")
+                .select("*")
+                .eq("user_id", userId)
+                .eq("copy_type_id", filterCopyTypeId)
+                .order('updated_at', { ascending: false });
+                // console.log("FETCHED FILTERED SEQUENCES",data)
+              if (error) {
+                console.error('Error fetching filtered email sequences:', error);
+                throw new Error('Error fetching filtered email sequences');
+              }
+              return {
+                status: 200,
+                body: JSON.stringify(data),
+              };
+            } catch (error) {
+              console.error('Error fetching filtered email sequences:', error);
+              return {
+                status: 500,
+                body: { errorMessage: 'Error fetching filtered email sequences' },
+              };
+            }
+          },
         
 
             
