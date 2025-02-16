@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({
       message: "Unknown error. If issue persists, please contact us.",
     })
   }
-
+console.log("FETCHING SUBSCRIPTION FOR CUSTOMER", customerId)
   const {
     primarySubscription,
     hasEverHadSubscription,

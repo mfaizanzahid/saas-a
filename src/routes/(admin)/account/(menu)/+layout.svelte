@@ -69,7 +69,7 @@
         </div>
       </div>
     </div>
-    <div class="container px-6 lg:px-6 py-3 lg:py-6">
+    <div class="container max-w-full px-6 lg:px-6 py-2 lg:py-4">
       <slot />
     </div>
   </div>

@@ -65,8 +65,8 @@ export async function resetCredits() {
         .from('stripe_customers')
         .select('*')
         .gte('activated_day', todayDate)
-        .lte('activated_day', todayDate + 3)
-        .gt('credits', 0); // Credits are greater than 0
+        .lte('activated_day', todayDate + 3);
+    // .gt('credits', 0); // Credits are greater than 0
 
     if (error) {
         console.error('Error fetching customers:', error);

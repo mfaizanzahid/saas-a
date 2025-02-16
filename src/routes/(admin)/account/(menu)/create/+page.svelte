@@ -7,6 +7,7 @@
   // import { createClient } from "@supabase/supabase-js"
   import { debounce, min } from "lodash"
   import { load } from "../../create_profile/+page.js"
+  import QuillEditor from "./QuillEditor.svelte"
 
   // import { PUBLIC_SUPABASE_URL } from "$env/static/public"
   // import { PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public"
@@ -33,6 +34,7 @@
   // let totalCredits = data.totalCredits
   // let customerPlanId = data.customerPlanId
   // let customerPlan = data.customerPlan
+  let quillRef
 
   let adminSection: Writable<String> = getContext("adminSection")
   adminSection.set("create")
@@ -139,7 +141,52 @@
   let isSaveResponseModalOpen = false
   let responseName = ""
   let showStarred = false,
-    showFilteredTypes = false
+    showFilteredTypes = false,
+    editorChanged = false,
+    isSavingCopyReply = false,
+    isSavingCopyReplySuccessfull = false
+
+  // $: originalReply = reply
+
+  function markEditorChanged(event: CustomEvent<string>) {
+    const newText = event.detail
+    console.log("Editor changed:", editorChanged)
+    console.log("Editor changed TEXT:", newText)
+    console.log("Original reply:", reply)
+    editorChanged = newText !== reply && newText !== `<p>${reply}</p>`
+  }
+
+  async function saveEditorText() {
+    isSavingCopyReply = true
+
+    console.log("Saving editor text:", reply)
+    //set reply as editor text
+    reply = quillRef.root.innerHTML
+
+    const formDataString = `reply=${reply}&copyId=${currentEmailId}&copySequenceId=${currentEmailSequenceId}`
+
+    const response = await fetch("/account/api?/saveCopyReply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formDataString,
+    })
+    if (response.ok) {
+      const result = await response.json()
+      console.log("Editor text saved successfully")
+      editorChanged = false
+    } else {
+      console.error("Failed to save editor text")
+    }
+    isSavingCopyReply = false
+    editorChanged = false
+    isSavingCopyReplySuccessfull = true
+    // Reset the button text after a short delay
+    setTimeout(() => {
+      isSavingCopyReplySuccessfull = false
+    }, 3000)
+  }
 
   async function fetchCopyTemplates(copyTypeId) {
     isLoadingCopyTemplates = true
@@ -579,15 +626,28 @@
   //   }, 2000)
   // }
 
+  // function copyToClipboard() {
+  //   const div = document.getElementById("replyTextArea") as HTMLDivElement
+  //   navigator.clipboard.writeText(div.innerText).then(() => {
+  //     isCopySuccessful = true
+  //     // Reset the button text after a short delay
+  //     setTimeout(() => {
+  //       isCopySuccessful = false
+  //     }, 2000)
+  //   })
+  // }
+
   function copyToClipboard() {
-    const div = document.getElementById("replyTextArea") as HTMLDivElement
-    navigator.clipboard.writeText(div.innerText).then(() => {
-      isCopySuccessful = true
-      // Reset the button text after a short delay
-      setTimeout(() => {
-        isCopySuccessful = false
-      }, 2000)
-    })
+    if (quillRef) {
+      const text = quillRef.root.innerHTML
+      navigator.clipboard.writeText(text).then(() => {
+        isCopySuccessful = true
+        // Reset the button text after a short delay
+        setTimeout(() => {
+          isCopySuccessful = false
+        }, 3000)
+      })
+    }
   }
 
   async function handleSubmit() {
@@ -1041,29 +1101,63 @@
     isSelectionMode.set(false)
   }
 
-  // Function to simulate typing effect
+  // // Function to simulate typing effect
+  // function typeText(text) {
+  //   displayedText = "" // Reset the displayed text
+  //   let index = 0
+
+  //   isTyping = true
+
+  //   function typeNextChar() {
+  //     if (index < text.length) {
+  //       displayedText += text[index]
+  //       index++
+  //       setTimeout(typeNextChar, typingSpeed)
+  //       const replyTextAreaDiv = document.getElementById("replyTextArea")
+  //       if (replyTextAreaDiv) {
+  //         replyTextAreaDiv.scrollTop = replyTextAreaDiv.scrollHeight
+  //       }
+  //     } else {
+  //       isTyping = false
+  //     }
+  //   }
+
+  //   typeNextChar()
+  // }
+
+  // Modified typeText function
   function typeText(text) {
     displayedText = "" // Reset the displayed text
     let index = 0
-
     isTyping = true
 
     function typeNextChar() {
       if (index < text.length) {
         displayedText += text[index]
+        updateQuill(displayedText) // Update Quill editor content
         index++
         setTimeout(typeNextChar, typingSpeed)
-        const replyTextAreaDiv = document.getElementById("replyTextArea")
-        if (replyTextAreaDiv) {
-          replyTextAreaDiv.scrollTop = replyTextAreaDiv.scrollHeight
-        }
       } else {
         isTyping = false
+        updateQuill(text) // Ensure final content is set correctly
       }
     }
 
     typeNextChar()
   }
+
+  // Add function to update Quill editor content
+  function updateQuill(content) {
+    if (quillRef) {
+      quillRef.root.innerHTML = content
+      // Auto scroll to bottom
+      const editorContainer = document.querySelector(".ql-editor")
+      if (editorContainer) {
+        editorContainer.scrollTop = editorContainer.scrollHeight
+      }
+    }
+  }
+
   // // Trigger the typing effect when the component mounts or reply updates
   // $: if (reply) typeText(reply)
 
@@ -1602,48 +1696,90 @@
 
     <div class="reply-container mt-5 lg:mt-0">
       <div class="flex justify-between items-center mb-2">
-        <div class="text-xl">
+        <div class="text-base self-start">
           {selectedCopyType}: {selectedCopyTemplate} Template Output
         </div>
-        <div class="space-x-1 mr-2">
-          <button
-            on:click={copyToClipboard}
-            class="btn btn-outline btn-sm py-1 px-2"
-            disabled={!reply || isCopySuccessful}
-          >
-            {#if isCopySuccessful}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#ffffff"
-                stroke-width="1"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><polyline points="20 6 9 17 4 12"></polyline></svg
-              >
-              Copied
-            {:else}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#000000"
-                stroke-width="1"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                ><rect x="9" y="9" width="10" height="10" rx="2" ry="2"
-                ></rect><path
-                  d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
-                ></path></svg
-              >
-              Copy
-            {/if}
-          </button>
+        <div class="flex self-end z-10">
+          <div class="mr-1">
+            <button
+              on:click={copyToClipboard}
+              class="tooltip tooltip-bottom btn btn-sm btn-outline btn-square py-1 px-2"
+              data-tip="Copy"
+              disabled={!reply || isCopySuccessful}
+            >
+              {#if isCopySuccessful}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><polyline points="20 6 9 17 4 12"></polyline></svg
+                >
+              {:else}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#000000"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><rect x="9" y="9" width="10" height="10" rx="2" ry="2"
+                  ></rect><path
+                    d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                  ></path></svg
+                >
+              {/if}
+            </button>
+          </div>
+          <div class="mr-1">
+            <button
+              on:click={saveEditorText}
+              class="tooltip tooltip-bottom btn btn-outline btn-sm btn-square py-1 px-2"
+              data-tip="Save"
+              disabled={isSavingCopyReply || !currentEmailId || !editorChanged}
+            >
+              {#if isSavingCopyReplySuccessfull}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#ffffff"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  ><polyline points="20 6 9 17 4 12"></polyline></svg
+                >
+              {:else}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#000000"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+                  ></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+              {/if}
+            </button>
+          </div>
         </div>
       </div>
       <div class="textarea-container">
@@ -1653,7 +1789,17 @@
           readonly
           class="w-full p-2 border rounded focus:outline-none focus:shadow-outline h-80vh resize-none"
         ></textarea> -->
-        <div
+        <div>
+          <div class="textarea-container">
+            <QuillEditor
+              bind:quill={quillRef}
+              bind:value={reply}
+              readOnly={isTyping}
+              on:input={markEditorChanged}
+            />
+          </div>
+        </div>
+        <!-- <div
           id="replyTextArea"
           class="w-full p-2 border rounded-md focus:outline-none focus:shadow-outline overflow-auto h-[70vh]"
           style="white-space: pre-wrap"
@@ -1663,7 +1809,7 @@
           {:else}
             {displayedText}
           {/if}
-        </div>
+        </div> -->
       </div>
 
       <div class="button-container" class:pt-2={!reply}>

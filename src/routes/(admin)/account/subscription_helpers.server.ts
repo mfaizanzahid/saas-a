@@ -24,6 +24,7 @@ let pricingPlans = []
 export const getOrCreateCustomerId = async ({
   supabaseServiceRole,
   session,
+  missingStripeCustomer = false,
 }) => {
   const { data: dbCustomer, error } = await supabaseServiceRole
     .from("stripe_customers")
@@ -36,7 +37,7 @@ export const getOrCreateCustomerId = async ({
     return { error: error }
   }
 
-  if (dbCustomer?.stripe_customer_id) {
+  if (dbCustomer?.stripe_customer_id && !missingStripeCustomer) {
 console.log("FOUND CUSTOMER ID IN SUPABASE", dbCustomer.stripe_customer_id)
     // if (!dbCustomer.billing_cycle) {
     //   //fetch the subscription from stripe api
@@ -86,7 +87,7 @@ console.log("NO CUSTOMER ID FOUND IN SUPABASE----CREATING NEW CUSTOMER IN STRIPE
 
 
 
-
+console.log("FETCHING FREE PLAN FROM SUPABASE")
   //In supabase table "plans" find the free plan with id 1 and get the credits and price for it
   const { data: plan, error: planError } = await supabaseServiceRole
     .from("plans")
@@ -103,9 +104,13 @@ console.log("NO CUSTOMER ID FOUND IN SUPABASE----CREATING NEW CUSTOMER IN STRIPE
   const planId = plan.id
   const planName = plan.name 
   const billingCycle = plan.billing_cycle
+console.log("FREE PLAN CREDITS", credits, "FREE PLAN PRICE", price, "FREE PLAN ID", planId, "FREE PLAN NAME", planName, "FREE PLAN BILLING CYCLE", billingCycle)
 
 
-
+if (missingStripeCustomer) {
+  return { customerId: customer.id, customerCredits: credits, totalCredits: credits, customerPlan: planName, customerPrice: price, customerPlanId: planId, billingCycle: billingCycle }
+}
+console.log("INSERTING CUSTOMER IN SUPABASE")
   // insert instead of upsert so we never over-write. PK ensures later attempts error.
   const { insertError } = await supabaseServiceRole
     .from("stripe_customers")
@@ -131,6 +136,43 @@ console.log("NO CUSTOMER ID FOUND IN SUPABASE----CREATING NEW CUSTOMER IN STRIPE
   return { customerId: customer.id }
 }
 
+async function addMissingStripeCustomer({ supabaseServiceRole, session }) {
+  const userId = session.user.id;
+  const userEmail = session.user.email;
+
+  console.log("CUSTOMER NOT FOUND IN STRIPE");
+  console.log("CREATING CUSTOMER IN STRIPE WITH NEW EMAIL");
+  const customer = await getOrCreateCustomerId({
+    supabaseServiceRole,
+    session: { user: { id: userId, email: userEmail } },
+    missingStripeCustomer: true,
+  });
+
+  
+
+  // Update stripe customer id, plan, plan_id, billing_cycle, price, credits, total_credits  in supabase for this user
+  console.log("UPDATING STRIPE CUSTOMER ID IN SUPABASE",customer.customerId);
+  const { data: updateStripeCustomer, error: updateError } = await supabaseServiceRole
+    .from("stripe_customers")
+    .update({ stripe_customer_id: customer.customerId, plan: customer.customerPlan, plan_id: customer.customerPlanId, billing_cycle: customer.billingCycle, price: customer.customerPrice, credits: customer.customerCredits, total_credits: customer.totalCredits, activated_at: new Date(), activated_day: new Date().getDate() })
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  if (updateError) {
+
+    return { error: updateError };
+  }
+  
+
+  console.log(
+    "UPDATED STRIPE CUSTOMER ID IN SUPABASE",
+    updateStripeCustomer.stripe_customer_id
+  );
+
+  return { customerId: customer.customerId }
+}
+
 export const fetchSubscription = async ({
   supabaseServiceRole,
   userEmail,
@@ -138,27 +180,63 @@ export const fetchSubscription = async ({
   customerId,
 }) => {
 
+console.log("FETCHING SUBSCRIPTION", userId, customerId)
   //fetch customer email from stripe 
-  const customer = await stripe.customers.retrieve(customerId)
-  const stripeEmail = customer.email
-  console.log("CURRENT SESSION EMAIL ADDRESS", userEmail, "CURRENT STRIPE EMAIL ADDRESS", stripeEmail)
+
+  let customer;
+try {
+  customer = await stripe.customers.retrieve(customerId);
   
-  //if email does not equal to user session email then update customer email in stripe
-  if(stripeEmail !== userEmail){
-    console.log("UPDATING CUSTOMER EMAIL IN STRIPE")
+const stripeEmail = customer.email;
+console.log("CURRENT SESSION EMAIL ADDRESS", userEmail, "CURRENT STRIPE EMAIL ADDRESS", stripeEmail);
+
+if (!customer?.email) {
+  console.log("CUSTOMER EMAIL NOT FOUND IN STRIPE");
+  return addMissingStripeCustomer({
+    supabaseServiceRole,
+    session: { user: { id: userId, email: userEmail } },
+  });
+}
+
+
+// If email does not equal to user session email then update customer email in stripe
+if (stripeEmail !== userEmail) {
+  console.log("UPDATING CUSTOMER EMAIL IN STRIPE");
+
+  try {
     const updatedCustomer = await stripe.customers.update(customerId, {
       email: userEmail,
-    })
-    console.log("UPDATED CUSTOMER EMAIL IN STRIPE", updatedCustomer.email)
-    //update email in stripe_customers table in supabase for this user with stripe_customer_id equal to customerId
-    console.log("UPDATING CUSTOMER EMAIL IN SUPABASE")
-    const { data:customer, error:updateError } = await supabaseServiceRole
-      .from("stripe_customers")
-      .update({ email: userEmail })
-      .eq("stripe_customer_id", customerId)
-      console.log("UPDATED CUSTOMER EMAIL IN SUPABASE", customer.email)
-    
+    });
+    console.log("UPDATED CUSTOMER EMAIL IN STRIPE", updatedCustomer.email);
+  } catch (error) {
+    console.log("ERROR UPDATING CUSTOMER EMAIL IN STRIPE", error);
   }
+
+  // Update email in stripe_customers table in supabase for this user with stripe_customer_id equal to customerId
+  console.log("UPDATING CUSTOMER EMAIL IN SUPABASE");
+  const { data: updatedCustomer, error: updateError } = await supabaseServiceRole
+    .from("stripe_customers")
+    .update({ email: userEmail })
+    .eq("stripe_customer_id", customerId);
+
+  if (updateError) {
+    console.log("ERROR UPDATING CUSTOMER EMAIL IN SUPABASE", updateError);
+  } else {
+    console.log("UPDATED CUSTOMER EMAIL IN SUPABASE", updatedCustomer.email);
+  }
+}
+} catch (error) {
+  console.log("ERROR FETCHING CUSTOMER IN STRIPE", error);
+  if (error.code === "resource_missing") {
+    console.log("CUSTOMER NOT FOUND IN STRIPE");
+    return addMissingStripeCustomer({
+      supabaseServiceRole,
+      session: { user: { id: userId, email: userEmail } },
+    });
+  }
+}
+
+
 
 
 

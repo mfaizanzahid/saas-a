@@ -631,7 +631,7 @@ console.log('EMAIL IDS',newEmailId,newEmailSequenceId)
           
           // currentEmailSequenceName = reply.match(/^[^,.;\(\n]+/)[0]
         const date = new Date();
-        currentEmailSequenceName = `${productName} (${copyTemplate} - ${copyType}) - ${date.toLocaleString()}`;
+        currentEmailSequenceName = `${productName} / ${copyTemplate} / ${copyType} / ${wordCount} words - ${date.toLocaleString()}`;
 
 
           // currentEmailSequenceName = reply.slice(0, 50)
@@ -1083,6 +1083,64 @@ console.log("SEARCH SEQUENCE TERM",searchTerm)
 
     
   },
+  
+  saveCopyReply: async ({ request, locals: { supabase, getSession } }) => {
+    const session = await getSession();
+    const userId = session?.user.id;
+
+    if (!session) {
+      return {
+        status: 401,
+        body: { errorMessage: 'User not authenticated' },
+      };
+    }
+
+    const formData = await request.formData()
+    const copyId = formData.get('copyId');
+    const copySequenceId = formData.get('copySequenceId');
+    
+    const reply = formData.get('reply');
+    
+    console.log("COPY ID",copyId)
+    console.log("REPLY",reply)
+
+    try {
+      // Save the generated content to the user's profile in Supabase
+      const { data, error } = await supabase
+      .from('copies')
+      .update({ content: reply })
+      .eq('id', copyId)
+      .select();
+
+      if (error) {
+        console.error('Error saving email:', error);
+        throw new Error('Error saving email');
+      }
+
+      const { data: updatedSequence, error: sequenceError } = await supabase
+      .from('copy_collection')
+      .update({ updated_at: new Date() })
+      .eq('id', copySequenceId)
+      .select();
+
+      if (sequenceError) {
+        console.error('Error updating sequence:', sequenceError);
+        throw new Error('Error updating sequence');
+      }
+
+      return {
+        status: 200,
+        body: JSON.stringify(data),
+      };
+    } catch (error) {
+      console.error('Error saving email:', error);
+      return {
+        status: 500,
+        body: { errorMessage: 'Error saving email' },
+      };
+    }
+  },
+
 
 
  
